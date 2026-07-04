@@ -1,33 +1,43 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/MenuLayer.hpp>
+#include <Geode/modify/CCTexture2D.hpp>
 
 using namespace geode::prelude;
 
-// Interceptamos el inicio de los niveles
-class $modify(PlayLayer) {
-    bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
-        // Ejecutamos la purga agresiva de VRAM y caché antes de cargar el nivel pesado
-        CCTextureCache::sharedTextureCache()->removeUnusedTextures();
-        CCDirector::sharedDirector()->purgeCachedData();
-        
-        log::info("Relentless Optimizer: VRAM purgada con exito al entrar al nivel.");
+namespace MemoryManager {
+    void executeAggressivePurge() {
+        if (auto textureCache = CCTextureCache::sharedTextureCache()) {
+            textureCache->removeUnusedTextures();
+        }
 
-        // Dejamos que el nivel cargue normalmente con la memoria limpia
+        if (auto director = CCDirector::sharedDirector()) {
+            director->purgeCachedData();
+        }
+    }
+}
+
+class $modify(RelentlessPlayLayer, PlayLayer) {
+    bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
+        MemoryManager::executeAggressivePurge();
         return PlayLayer::init(level, useReplay, dontCreateObjects);
+    }
+
+    void resetLevel() {
+        MemoryManager::executeAggressivePurge();
+        PlayLayer::resetLevel();
     }
 };
 
-// Interceptamos el regreso al menú principal
-class $modify(MenuLayer) {
+class $modify(RelentlessMenuLayer, MenuLayer) {
     bool init() {
-        // Volvemos a vaciar la basura gráfica acumulada durante la sesión de juego
-        CCTextureCache::sharedTextureCache()->removeUnusedTextures();
-        CCDirector::sharedDirector()->purgeCachedData();
-        
-        log::info("Relentless Optimizer: VRAM purgada con exito al volver al menu.");
-
-        // Cargamos el menú
+        MemoryManager::executeAggressivePurge();
         return MenuLayer::init();
+    }
+};
+
+class $modify(RelentlessTexture, CCTexture2D) {
+    void setAntiAliasTexParameters() {
+        this->setAliasTexParameters();
     }
 };
