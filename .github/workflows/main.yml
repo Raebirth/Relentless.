@@ -34,16 +34,9 @@ jobs:
           build-config: Release
           target: ${{ matrix.config.target }}
 
-  package:
-    name: Package mod
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - uses: geode-sdk/build-geode-mod/combine@main
-        id: build
-        
+      # Le pedimos el archivo directamente a la máquina que lo acaba de compilar
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Relentless
-          path: ./*.geode
+          name: Relentless-${{ matrix.config.name }}
+          path: build/*.geode
