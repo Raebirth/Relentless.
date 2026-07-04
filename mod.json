@@ -1,6 +1,11 @@
 {
-    "geode": "3.4.0",
-    "gd": "2.206",
+    "geode": "5.7.1",
+    "gd": {
+        "android": "2.2081",
+        "win": "2.2081",
+        "mac": "2.2081",
+        "ios": "2.2081"
+    },
     "id": "raebirth.relentless",
     "name": "Relentless",
     "developer": "Raebirth",
