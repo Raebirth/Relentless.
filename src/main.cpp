@@ -6,13 +6,9 @@
 using namespace geode::prelude;
 
 namespace MemoryManager {
-    void executeAggressivePurge() {
+    void safePurge() {
         if (auto textureCache = CCTextureCache::sharedTextureCache()) {
             textureCache->removeUnusedTextures();
-        }
-
-        if (auto spriteCache = CCSpriteFrameCache::sharedSpriteFrameCache()) {
-            spriteCache->removeUnusedSpriteFrames();
         }
 
         if (auto director = CCDirector::sharedDirector()) {
@@ -23,19 +19,14 @@ namespace MemoryManager {
 
 class $modify(RelentlessPlayLayer, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
-        MemoryManager::executeAggressivePurge();
+        MemoryManager::safePurge();
         return PlayLayer::init(level, useReplay, dontCreateObjects);
-    }
-
-    void resetLevel() {
-        MemoryManager::executeAggressivePurge();
-        PlayLayer::resetLevel();
     }
 };
 
 class $modify(RelentlessMenuLayer, MenuLayer) {
     bool init() {
-        MemoryManager::executeAggressivePurge();
+        MemoryManager::safePurge();
         return MenuLayer::init();
     }
 };
