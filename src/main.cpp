@@ -11,6 +11,10 @@ namespace MemoryManager {
             textureCache->removeUnusedTextures();
         }
 
+        if (auto spriteCache = CCSpriteFrameCache::sharedSpriteFrameCache()) {
+            spriteCache->removeUnusedSpriteFrames();
+        }
+
         if (auto director = CCDirector::sharedDirector()) {
             director->purgeCachedData();
         }
