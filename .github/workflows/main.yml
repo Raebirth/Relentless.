@@ -42,9 +42,8 @@ jobs:
       - uses: geode-sdk/build-geode-mod/combine@main
         id: build
         
-      # ESTE ES EL PASO QUE FALTABA: Obligar al robot a escupir el archivo
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Relentless-Mod
-          path: ${{ steps.build.outputs.build-output }}
+          name: Relentless
+          path: ./*.geode
