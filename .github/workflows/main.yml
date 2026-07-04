@@ -1,0 +1,43 @@
+name: Build Geode Mod
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+        - name: Android32
+          os: ubuntu-22.04
+          target: Android32
+        - name: Android64
+          os: ubuntu-22.04
+          target: Android64
+
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Build mod
+        uses: geode-sdk/build-geode-mod@main
+        with:
+          bindings-ref: main
+          build-config: Release
+          target: ${{ matrix.config.target }}
+
+  package:
+    name: Package mod
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - uses: geode-sdk/build-geode-mod/combine@main
+        id: build
