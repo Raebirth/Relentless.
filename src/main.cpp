@@ -2,6 +2,7 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <Geode/modify/MenuLayer.hpp>
 #include <Geode/modify/CCTexture2D.hpp>
+#include <Geode/modify/CCParticleSystem.hpp>
 
 using namespace geode::prelude;
 
@@ -38,5 +39,21 @@ class $modify(RelentlessMenuLayer, MenuLayer) {
 class $modify(RelentlessTexture, CCTexture2D) {
     void setAntiAliasTexParameters() {
         this->setAliasTexParameters();
+    }
+};
+
+class $modify(RelentlessParticles, CCParticleSystem) {
+    bool initWithTotalParticles(unsigned int numberOfParticles) {
+        if (numberOfParticles > 50) {
+            numberOfParticles = 50;
+        }
+        return CCParticleSystem::initWithTotalParticles(numberOfParticles);
+    }
+
+    void setTotalParticles(unsigned int tp) {
+        if (tp > 50) {
+            tp = 50;
+        }
+        CCParticleSystem::setTotalParticles(tp);
     }
 };
