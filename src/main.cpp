@@ -5,6 +5,10 @@
 
 using namespace geode::prelude;
 
+$on_mod(Loaded) {
+    CCTexture2D::setDefaultAlphaPixelFormat(cocos2d::kCCTexture2DPixelFormat_RGBA4444);
+}
+
 namespace MemoryManager {
     void safePurge() {
         if (auto textureCache = CCTextureCache::sharedTextureCache()) {
