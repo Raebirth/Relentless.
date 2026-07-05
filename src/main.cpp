@@ -5,6 +5,7 @@
 #include <Geode/modify/CCParticleSystem.hpp>
 #include <Geode/modify/CCActionManager.hpp>
 #include <Geode/modify/GameObject.hpp>
+#include <Geode/modify/CCNode.hpp>
 
 using namespace geode::prelude;
 
@@ -27,6 +28,11 @@ class $modify(RelentlessPlayLayer, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         MemoryManager::safePurge();
         return PlayLayer::init(level, useReplay, dontCreateObjects);
+    }
+
+    void resetLevel() {
+        MemoryManager::safePurge();
+        PlayLayer::resetLevel();
     }
 };
 
@@ -81,5 +87,12 @@ class $modify(RelentlessCulling, GameObject) {
         }
         
         GameObject::visit();
+    }
+};
+
+class $modify(RelentlessShader, CCNode) {
+    void setShaderProgram(ccGLProgram* program) {
+        auto defaultShader = CCShaderCache::sharedShaderCache()->programForKey(kCCShader_PositionTextureColor);
+        CCNode::setShaderProgram(defaultShader);
     }
 };
