@@ -91,7 +91,7 @@ class $modify(RelentlessCulling, GameObject) {
 };
 
 class $modify(RelentlessShader, CCNode) {
-    void setShaderProgram(ccGLProgram* program) {
+    void setShaderProgram(CCGLProgram* program) {
         auto defaultShader = CCShaderCache::sharedShaderCache()->programForKey(kCCShader_PositionTextureColor);
         CCNode::setShaderProgram(defaultShader);
     }
