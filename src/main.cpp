@@ -5,7 +5,6 @@
 #include <Geode/modify/CCParticleSystem.hpp>
 #include <Geode/modify/CCActionManager.hpp>
 #include <Geode/modify/GameObject.hpp>
-#include <Geode/modify/CCNode.hpp>
 
 using namespace geode::prelude;
 
@@ -87,12 +86,5 @@ class $modify(RelentlessCulling, GameObject) {
         }
         
         GameObject::visit();
-    }
-};
-
-class $modify(RelentlessShader, CCNode) {
-    void setShaderProgram(CCGLProgram* program) {
-        auto defaultShader = CCShaderCache::sharedShaderCache()->programForKey(kCCShader_PositionTextureColor);
-        CCNode::setShaderProgram(defaultShader);
     }
 };
