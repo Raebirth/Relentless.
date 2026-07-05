@@ -3,6 +3,7 @@
 #include <Geode/modify/MenuLayer.hpp>
 #include <Geode/modify/CCTexture2D.hpp>
 #include <Geode/modify/CCParticleSystem.hpp>
+#include <Geode/modify/CCActionManager.hpp>
 
 using namespace geode::prelude;
 
@@ -55,5 +56,20 @@ class $modify(RelentlessParticles, CCParticleSystem) {
             tp = 50;
         }
         CCParticleSystem::setTotalParticles(tp);
+    }
+};
+
+class $modify(RelentlessActionManager, CCActionManager) {
+    void update(float dt) {
+        static bool skip = false;
+        static float accumulatedDt = 0.0f;
+
+        accumulatedDt += dt;
+        skip = !skip;
+
+        if (!skip) {
+            CCActionManager::update(accumulatedDt);
+            accumulatedDt = 0.0f;
+        }
     }
 };
