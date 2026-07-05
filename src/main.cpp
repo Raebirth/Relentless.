@@ -43,11 +43,11 @@ class $modify(RelentlessTexture, CCTexture2D) {
 };
 
 class $modify(RelentlessParticles, CCParticleSystem) {
-    bool initWithTotalParticles(unsigned int numberOfParticles) {
+    bool initWithTotalParticles(unsigned int numberOfParticles, bool b) {
         if (numberOfParticles > 50) {
             numberOfParticles = 50;
         }
-        return CCParticleSystem::initWithTotalParticles(numberOfParticles);
+        return CCParticleSystem::initWithTotalParticles(numberOfParticles, b);
     }
 
     void setTotalParticles(unsigned int tp) {
