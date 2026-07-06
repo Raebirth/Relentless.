@@ -52,13 +52,6 @@ class $modify(RelentlessPlayLayer, PlayLayer) {
 class $modify(RelentlessMenuLayer, MenuLayer) {
     bool init() {
         MemoryManager::safePurge();
-        
-        if (auto director = CCDirector::sharedDirector()) {
-            if (auto glView = director->getOpenGLView()) {
-                glView->toggleUpdateVSync(false);
-            }
-        }
-        
         return MenuLayer::init();
     }
 };
