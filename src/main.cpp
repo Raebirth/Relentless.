@@ -5,10 +5,22 @@
 #include <Geode/modify/CCParticleSystem.hpp>
 #include <Geode/modify/CCActionManager.hpp>
 #include <Geode/modify/GameObject.hpp>
+#include <pthread.h>
+#include <sys/resource.h>
 
 using namespace geode::prelude;
 
+void forceExtremeThreadPriority() {
+    setpriority(PRIO_PROCESS, 0, -20);
+
+    pthread_t thread_id = pthread_self();
+    struct sched_param param;
+    param.sched_priority = sched_get_priority_max(SCHED_FIFO);
+    pthread_setschedparam(thread_id, SCHED_FIFO, &param);
+}
+
 $on_mod(Loaded) {
+    forceExtremeThreadPriority();
     CCTexture2D::setDefaultAlphaPixelFormat(cocos2d::kCCTexture2DPixelFormat_RGBA4444);
 }
 
