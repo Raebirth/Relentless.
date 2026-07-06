@@ -3,17 +3,28 @@
 #include <Geode/modify/MenuLayer.hpp>
 #include <Geode/modify/CCTexture2D.hpp>
 #include <Geode/modify/CCParticleSystem.hpp>
+#include <Geode/modify/FMODAudioEngine.hpp>
 #include <pthread.h>
 #include <sys/resource.h>
+#include <sched.h>
 
 using namespace geode::prelude;
 
 void forceExtremeThreadPriority() {
     setpriority(PRIO_PROCESS, 0, -20);
+    
     pthread_t thread_id = pthread_self();
     struct sched_param param;
     param.sched_priority = sched_get_priority_max(SCHED_FIFO);
     pthread_setschedparam(thread_id, SCHED_FIFO, &param);
+
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(4, &cpuset);
+    CPU_SET(5, &cpuset);
+    CPU_SET(6, &cpuset);
+    CPU_SET(7, &cpuset);
+    sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
 }
 
 $on_mod(Loaded) {
@@ -41,6 +52,13 @@ class $modify(RelentlessPlayLayer, PlayLayer) {
 class $modify(RelentlessMenuLayer, MenuLayer) {
     bool init() {
         MemoryManager::safePurge();
+        
+        if (auto director = CCDirector::sharedDirector()) {
+            if (auto glView = director->getOpenGLView()) {
+                glView->toggleUpdateVSync(false);
+            }
+        }
+        
         return MenuLayer::init();
     }
 };
@@ -60,5 +78,14 @@ class $modify(RelentlessParticles, CCParticleSystem) {
     void setTotalParticles(unsigned int tp) {
         if (tp > 50) tp = 50;
         CCParticleSystem::setTotalParticles(tp);
+    }
+};
+
+class $modify(RelentlessAudio, FMODAudioEngine) {
+    void setupAudioEngine() {
+        FMODAudioEngine::setupAudioEngine();
+        if (m_system) {
+            m_system->setDSPBufferSize(256, 2);
+        }
     }
 };
