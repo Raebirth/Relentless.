@@ -3,9 +3,6 @@
 #include <Geode/modify/MenuLayer.hpp>
 #include <Geode/modify/CCTexture2D.hpp>
 #include <Geode/modify/CCParticleSystem.hpp>
-#include <Geode/modify/CCActionManager.hpp>
-#include <Geode/modify/GameObject.hpp>
-#include <Geode/modify/CCTouchDispatcher.hpp>
 #include <pthread.h>
 #include <sys/resource.h>
 
@@ -21,7 +18,6 @@ void forceExtremeThreadPriority() {
 
 $on_mod(Loaded) {
     forceExtremeThreadPriority();
-    CCTexture2D::setDefaultAlphaPixelFormat(cocos2d::kCCTexture2DPixelFormat_RGBA4444);
 }
 
 namespace MemoryManager {
@@ -39,11 +35,6 @@ class $modify(RelentlessPlayLayer, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         MemoryManager::safePurge();
         return PlayLayer::init(level, useReplay, dontCreateObjects);
-    }
-
-    void resetLevel() {
-        MemoryManager::safePurge();
-        PlayLayer::resetLevel();
     }
 };
 
@@ -65,41 +56,9 @@ class $modify(RelentlessParticles, CCParticleSystem) {
         if (numberOfParticles > 50) numberOfParticles = 50;
         return CCParticleSystem::initWithTotalParticles(numberOfParticles, b);
     }
+    
     void setTotalParticles(unsigned int tp) {
         if (tp > 50) tp = 50;
         CCParticleSystem::setTotalParticles(tp);
-    }
-};
-
-class $modify(RelentlessActionManager, CCActionManager) {
-    void update(float dt) {
-        static bool skip = false;
-        static float accumulatedDt = 0.0f;
-        accumulatedDt += dt;
-        skip = !skip;
-        if (!skip) {
-            CCActionManager::update(accumulatedDt);
-            accumulatedDt = 0.0f;
-        }
-    }
-};
-
-class $modify(RelentlessCulling, GameObject) {
-    void visit() {
-        auto playLayer = PlayLayer::get();
-        if (playLayer && playLayer->m_player1) {
-            float playerX = playLayer->m_player1->getPositionX();
-            float objX = this->getPositionX();
-            if (objX < playerX - 400.0f || objX > playerX + 1000.0f) {
-                return;
-            }
-        }
-        GameObject::visit();
-    }
-};
-
-class $modify(RelentlessTouch, CCTouchDispatcher) {
-    void touchesBegan(cocos2d::CCSet* touches, cocos2d::CCEvent* event) {
-        CCTouchDispatcher::touchesBegan(touches, event);
     }
 };
