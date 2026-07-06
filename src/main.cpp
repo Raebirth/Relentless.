@@ -5,6 +5,7 @@
 #include <Geode/modify/CCParticleSystem.hpp>
 #include <Geode/modify/CCActionManager.hpp>
 #include <Geode/modify/GameObject.hpp>
+#include <Geode/modify/CCTouchDispatcher.hpp>
 #include <pthread.h>
 #include <sys/resource.h>
 
@@ -12,7 +13,6 @@ using namespace geode::prelude;
 
 void forceExtremeThreadPriority() {
     setpriority(PRIO_PROCESS, 0, -20);
-
     pthread_t thread_id = pthread_self();
     struct sched_param param;
     param.sched_priority = sched_get_priority_max(SCHED_FIFO);
@@ -87,16 +87,19 @@ class $modify(RelentlessActionManager, CCActionManager) {
 class $modify(RelentlessCulling, GameObject) {
     void visit() {
         auto playLayer = PlayLayer::get();
-        
         if (playLayer && playLayer->m_player1) {
             float playerX = playLayer->m_player1->getPositionX();
             float objX = this->getPositionX();
-
             if (objX < playerX - 400.0f || objX > playerX + 1000.0f) {
                 return;
             }
         }
-        
         GameObject::visit();
+    }
+};
+
+class $modify(RelentlessTouch, CCTouchDispatcher) {
+    void touchesBegan(cocos2d::CCSet* touches, cocos2d::CCEvent* event) {
+        CCTouchDispatcher::touchesBegan(touches, event);
     }
 };
