@@ -46,7 +46,7 @@ namespace MemoryManager {
 
 class $modify(RelentlessPlayLayer, PlayLayer) {
     static void onModify(auto& self) {
-        self.setHookPriority("PlayLayer::init", -10000); 
+        (void)self.setHookPriority("PlayLayer::init", -10000); 
     }
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
@@ -64,7 +64,7 @@ class $modify(RelentlessPlayLayer, PlayLayer) {
 
 class $modify(RelentlessMenuLayer, MenuLayer) {
     static void onModify(auto& self) {
-        self.setHookPriority("MenuLayer::init", -10000); 
+        (void)self.setHookPriority("MenuLayer::init", -10000); 
     }
 
     bool init() {
