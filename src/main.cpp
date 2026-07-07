@@ -8,7 +8,6 @@
 #include <sys/resource.h>
 #include <sched.h>
 #include <mimalloc.h>
-#include <mimalloc-new-delete.h>
 
 using namespace geode::prelude;
 
