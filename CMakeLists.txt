@@ -36,6 +36,6 @@ set(MI_OVERRIDE ON CACHE BOOL "Override standard malloc" FORCE)
 
 FetchContent_MakeAvailable(mimalloc)
 
-target_link_libraries(${PROJECT_NAME} PUBLIC mimalloc)
+target_link_libraries(${PROJECT_NAME} mimalloc)
 
 setup_geode_mod(${PROJECT_NAME})
