@@ -10,10 +10,8 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
 project(Template VERSION 1.0.0)
 
-# Add all source files inside src (recursively)
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 
-# Set up the mod binary
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
 if (NOT DEFINED ENV{GEODE_SDK})
@@ -24,5 +22,20 @@ endif()
 
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
-# Set up dependencies, resources, and link Geode.
+include(FetchContent)
+FetchContent_Declare(
+  mimalloc
+  GIT_REPOSITORY https://github.com/microsoft/mimalloc.git
+  GIT_TAG v2.1.2 
+)
+
+set(MI_BUILD_SHARED OFF CACHE BOOL "Build shared library" FORCE)
+set(MI_BUILD_OBJECT OFF CACHE BOOL "Build object library" FORCE)
+set(MI_BUILD_TESTS OFF CACHE BOOL "Build tests" FORCE)
+set(MI_OVERRIDE ON CACHE BOOL "Override standard malloc" FORCE)
+
+FetchContent_MakeAvailable(mimalloc)
+
+target_link_libraries(${PROJECT_NAME} PUBLIC mimalloc)
+
 setup_geode_mod(${PROJECT_NAME})
