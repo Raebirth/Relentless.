@@ -7,6 +7,8 @@
 #include <pthread.h>
 #include <sys/resource.h>
 #include <sched.h>
+#include <mimalloc.h>
+#include <mimalloc-new-delete.h>
 
 using namespace geode::prelude;
 
@@ -43,13 +45,28 @@ namespace MemoryManager {
 }
 
 class $modify(RelentlessPlayLayer, PlayLayer) {
+    static void onModify(auto& self) {
+        self.setHookPriority("PlayLayer::init", -10000); 
+    }
+
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         MemoryManager::safePurge();
+        
+        auto gm = GameManager::get();
+        if (gm) {
+            gm->setGameVariable("0023", false);
+            gm->setGameVariable("0024", false);
+        }
+        
         return PlayLayer::init(level, useReplay, dontCreateObjects);
     }
 };
 
 class $modify(RelentlessMenuLayer, MenuLayer) {
+    static void onModify(auto& self) {
+        self.setHookPriority("MenuLayer::init", -10000); 
+    }
+
     bool init() {
         MemoryManager::safePurge();
         return MenuLayer::init();
@@ -79,6 +96,7 @@ class $modify(RelentlessAudio, FMODAudioEngine) {
         FMODAudioEngine::setupAudioEngine();
         if (m_system) {
             m_system->setDSPBufferSize(256, 2);
+            m_system->setSoftwareChannels(32);
         }
     }
 };
