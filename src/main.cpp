@@ -4,10 +4,13 @@
 #include <Geode/modify/CCTexture2D.hpp>
 #include <Geode/modify/CCParticleSystem.hpp>
 #include <Geode/modify/FMODAudioEngine.hpp>
+#include <Geode/modify/CCDirector.hpp>
 #include <pthread.h>
 #include <sys/resource.h>
 #include <sched.h>
 #include <mimalloc.h>
+#include <atomic>
+#include <cmath>
 
 using namespace geode::prelude;
 
@@ -43,9 +46,18 @@ namespace MemoryManager {
     }
 }
 
+class $modify(RelentlessDirector, CCDirector) {
+    void setAnimationInterval(double interval) {
+        double stableInterval = std::round(interval * 10000000.0) / 10000000.0;
+        CCDirector::setAnimationInterval(stableInterval);
+    }
+};
+
 class $modify(RelentlessPlayLayer, PlayLayer) {
     static void onModify(auto& self) {
         (void)self.setHookPriority("PlayLayer::init", -10000); 
+        (void)self.setHookPriority("PlayLayer::pushButton", -10000); 
+        (void)self.setHookPriority("PlayLayer::releaseButton", -10000); 
     }
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
@@ -58,6 +70,18 @@ class $modify(RelentlessPlayLayer, PlayLayer) {
         }
         
         return PlayLayer::init(level, useReplay, dontCreateObjects);
+    }
+
+    void pushButton(int state, bool player) {
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        PlayLayer::pushButton(state, player);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+    }
+
+    void releaseButton(int state, bool player) {
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        PlayLayer::releaseButton(state, player);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
     }
 };
 
@@ -94,7 +118,7 @@ class $modify(RelentlessAudio, FMODAudioEngine) {
     void setupAudioEngine() {
         FMODAudioEngine::setupAudioEngine();
         if (m_system) {
-            m_system->setDSPBufferSize(256, 2);
+            m_system->setDSPBufferSize(128, 4);
             m_system->setSoftwareChannels(32);
         }
     }
