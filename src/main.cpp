@@ -74,19 +74,12 @@ class $modify(RelentlessPlayLayer, PlayLayer) {
 
 class $modify(RelentlessBaseGameLayer, GJBaseGameLayer) {
     static void onModify(auto& self) {
-        (void)self.setHookPriority("GJBaseGameLayer::pushButton", -10000); 
-        (void)self.setHookPriority("GJBaseGameLayer::releaseButton", -10000); 
+        (void)self.setHookPriority("GJBaseGameLayer::handleButton", -10000); 
     }
 
-    void pushButton(int state, bool player) {
+    void handleButton(bool p0, int p1, bool p2) {
         std::atomic_thread_fence(std::memory_order_seq_cst);
-        GJBaseGameLayer::pushButton(state, player);
-        std::atomic_thread_fence(std::memory_order_seq_cst);
-    }
-
-    void releaseButton(int state, bool player) {
-        std::atomic_thread_fence(std::memory_order_seq_cst);
-        GJBaseGameLayer::releaseButton(state, player);
+        GJBaseGameLayer::handleButton(p0, p1, p2);
         std::atomic_thread_fence(std::memory_order_seq_cst);
     }
 };
