@@ -1,5 +1,6 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/MenuLayer.hpp>
 #include <Geode/modify/CCTexture2D.hpp>
 #include <Geode/modify/CCParticleSystem.hpp>
@@ -56,8 +57,6 @@ class $modify(RelentlessDirector, CCDirector) {
 class $modify(RelentlessPlayLayer, PlayLayer) {
     static void onModify(auto& self) {
         (void)self.setHookPriority("PlayLayer::init", -10000); 
-        (void)self.setHookPriority("PlayLayer::pushButton", -10000); 
-        (void)self.setHookPriority("PlayLayer::releaseButton", -10000); 
     }
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
@@ -71,16 +70,23 @@ class $modify(RelentlessPlayLayer, PlayLayer) {
         
         return PlayLayer::init(level, useReplay, dontCreateObjects);
     }
+};
+
+class $modify(RelentlessBaseGameLayer, GJBaseGameLayer) {
+    static void onModify(auto& self) {
+        (void)self.setHookPriority("GJBaseGameLayer::pushButton", -10000); 
+        (void)self.setHookPriority("GJBaseGameLayer::releaseButton", -10000); 
+    }
 
     void pushButton(int state, bool player) {
         std::atomic_thread_fence(std::memory_order_seq_cst);
-        PlayLayer::pushButton(state, player);
+        GJBaseGameLayer::pushButton(state, player);
         std::atomic_thread_fence(std::memory_order_seq_cst);
     }
 
     void releaseButton(int state, bool player) {
         std::atomic_thread_fence(std::memory_order_seq_cst);
-        PlayLayer::releaseButton(state, player);
+        GJBaseGameLayer::releaseButton(state, player);
         std::atomic_thread_fence(std::memory_order_seq_cst);
     }
 };
