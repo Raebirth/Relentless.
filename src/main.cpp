@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <sys/resource.h>
 #include <sched.h>
+#include <unistd.h>
 #include <mimalloc.h>
 #include <atomic>
 #include <cmath>
@@ -30,10 +31,6 @@ void forceExtremeThreadPriority() {
     CPU_SET(6, &cpuset);
     CPU_SET(7, &cpuset);
     sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
-}
-
-$on_mod(Loaded) {
-    forceExtremeThreadPriority();
 }
 
 namespace MemoryManager {
@@ -60,6 +57,7 @@ class $modify(RelentlessPlayLayer, PlayLayer) {
     }
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
+        forceExtremeThreadPriority();
         MemoryManager::safePurge();
         
         auto gm = GameManager::get();
@@ -90,6 +88,7 @@ class $modify(RelentlessMenuLayer, MenuLayer) {
     }
 
     bool init() {
+        forceExtremeThreadPriority();
         MemoryManager::safePurge();
         return MenuLayer::init();
     }
