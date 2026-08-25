@@ -1,6 +1,9 @@
 {
     "geode": "5.9.0",
-    "gd": "2.204",
+    "gd": {
+        "win": "2.204",
+        "android": "2.206"
+    },
     "version": "v1.0.0",
     "id": "relentless.mod",
     "name": "Relentless",
