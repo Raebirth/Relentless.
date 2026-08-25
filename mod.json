@@ -1,14 +1,16 @@
 {
-    "geode": "5.7.1",
-    "gd": {
-        "android": "2.2081",
-        "win": "2.2081",
-        "mac": "2.2081",
-        "ios": "2.2081"
-    },
-    "id": "raebirth.relentless",
+    "geode": "5.9.0",
+    "gd": "2.204",
+    "version": "v1.0.0",
+    "id": "relentless.mod",
     "name": "Relentless",
-    "developer": "Raebirth",
-    "version": "v1.5.0",
-    "description": "Optimizacion extrema de texturas y purga de VRAM para jugar sin lag."
+    "developer": "Optimization Engineer",
+    "description": "Hyper-optimized Geode mod with low-latency input and zero-allocation loops.",
+    "settings": {
+        "show-stats": {
+            "name": "Show Stats",
+            "type": "bool",
+            "default": true
+        }
+    }
 }
