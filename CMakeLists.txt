@@ -8,8 +8,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ---------------------------------------------------------------------------
 # GEODE SDK DISCOVERY (Fix for GitHub Actions / CI)
 # ---------------------------------------------------------------------------
-# The GitHub Action downloads the SDK source and exposes it via GEODE_SDK.
-# We must include it directly rather than using find_package.
 if(NOT DEFINED ENV{GEODE_SDK})
     message(FATAL_ERROR "Unable to find Geode SDK! Please define GEODE_SDK environment variable to point to Geode")
 else()
@@ -49,7 +47,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
             -O3
             -fvisibility=hidden
             -fvisibility-inlines-hidden
-            -fno-rtti
             -fno-exceptions
             -fomit-frame-pointer
             -fstrict-aliasing
@@ -100,7 +97,6 @@ elseif(MSVC)
             /Ot
             /GL
             /Gy
-            /GR-
             /fp:fast
             /arch:AVX2
         >
