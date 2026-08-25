@@ -1,11 +1,14 @@
 {
     "geode": "5.9.0",
-    "gd": "2.2081",
+    "gd": {
+        "win": "2.204",
+        "android": "2.206"
+    },
     "version": "v1.0.0",
     "id": "relentless.mod",
     "name": "Relentless",
     "developer": "Optimization Engineer",
-    "description": "A hyper-optimized Geode mod with zero-latency input and zero-allocation frame loops.",
+    "description": "Hyper-optimized Geode mod with low-latency input and zero-allocation loops.",
     "settings": {
         "show-stats": {
             "name": "Show Stats",
