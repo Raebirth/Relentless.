@@ -8,16 +8,16 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ---------------------------------------------------------------------------
 # GEODE SDK DISCOVERY (Fix for GitHub Actions / CI)
 # ---------------------------------------------------------------------------
-# The GitHub Action downloads the SDK and exposes it via GEODE_SDK.
-# We map it to CMAKE_PREFIX_PATH so find_package can locate GeodeConfig.cmake
-if(DEFINED ENV{GEODE_SDK})
-    message(STATUS "GEODE_SDK environment variable detected: $ENV{GEODE_SDK}")
-    list(APPEND CMAKE_PREFIX_PATH "$ENV{GEODE_SDK}")
-    set(Geode_DIR "$ENV{GEODE_SDK}")
+# The GitHub Action downloads the SDK source and exposes it via GEODE_SDK.
+# We must include it directly rather than using find_package.
+if(NOT DEFINED ENV{GEODE_SDK})
+    message(FATAL_ERROR "Unable to find Geode SDK! Please define GEODE_SDK environment variable to point to Geode")
+else()
+    message(STATUS "Found Geode: $ENV{GEODE_SDK}")
 endif()
 
-# Include Geode SDK
-find_package(Geode REQUIRED)
+# Add the SDK source tree directly to the build
+add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
 # ---------------------------------------------------------------------------
 # 1. LINK-TIME OPTIMIZATION (LTO / IPO)
