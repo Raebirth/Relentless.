@@ -58,7 +58,7 @@ endif()
 #   liblog     — __android_log_print (used internally by some NDK headers)
 if(ANDROID)
     target_link_libraries(${PROJECT_NAME} PRIVATE android log)
-    message(STATUS "[Repentless] Linked libandroid + liblog for Android.")
+    message(STATUS "[Relentless] Linked libandroid + liblog for Android.")
 endif()
 
 
