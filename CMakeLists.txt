@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.21)
-project(Relentless VERSION 1.0.0 LANGUAGES CXX C)
+project(Repentless VERSION 1.1.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # ---------------------------------------------------------------------------
-# GEODE SDK DISCOVERY (Fix for GitHub Actions / CI)
+# GEODE SDK DISCOVERY
 # ---------------------------------------------------------------------------
 if(NOT DEFINED ENV{GEODE_SDK})
     message(FATAL_ERROR "Unable to find Geode SDK! Please define GEODE_SDK environment variable to point to Geode")
@@ -14,7 +14,6 @@ else()
     message(STATUS "Found Geode: $ENV{GEODE_SDK}")
 endif()
 
-# Add the SDK source tree directly to the build
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
 # ---------------------------------------------------------------------------
@@ -32,16 +31,41 @@ endif()
 
 # ---------------------------------------------------------------------------
 # 2. SOURCE & TARGET DEFINITIONS
+#
+#  Headers (auto-discovered by the compiler, listed for documentation):
+#    src/LockFreeQueue.hpp       — wait-free SPSC ring buffer
+#    src/InputQueue.hpp          — typed InputEvent + global g_inputQueue
+#    src/FrameSmoother.hpp       — integer EMA FPS counter
+#    src/AndroidOptimizations.hpp— CCEGLView hook, CPU affinity, dt stabilizer
+#                                  (compiled only for Android targets)
 # ---------------------------------------------------------------------------
 add_library(${PROJECT_NAME} SHARED
     src/main.cpp
 )
 
+
 # ---------------------------------------------------------------------------
-# 3. AGGRESSIVE COMPILER & LINKER FLAGS
+# 3. PLATFORM-SPECIFIC SYSTEM LIBRARIES
+# ---------------------------------------------------------------------------
+
+# Windows: winmm.lib required for timeBeginPeriod / timeEndPeriod.
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE winmm)
+endif()
+
+# Android: link system libraries required by AndroidOptimizations.hpp
+#   libandroid — ANativeActivity, ALooper, AInputQueue structs/functions
+#   liblog     — __android_log_print (used internally by some NDK headers)
+if(ANDROID)
+    target_link_libraries(${PROJECT_NAME} PRIVATE android log)
+    message(STATUS "[Repentless] Linked libandroid + liblog for Android.")
+endif()
+
+
+# ---------------------------------------------------------------------------
+# 4. AGGRESSIVE COMPILER & LINKER FLAGS
 # ---------------------------------------------------------------------------
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    # Clang (Android NDK) & GCC
     target_compile_options(${PROJECT_NAME} PRIVATE
         $<$<CONFIG:Release>:
             -O3
@@ -57,7 +81,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         >
     )
 
-    # Linker flags for Release
     target_link_options(${PROJECT_NAME} PRIVATE
         $<$<CONFIG:Release>:
             -Wl,--gc-sections
@@ -70,9 +93,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         >
     )
 
-    # -----------------------------------------------------------------------
-    # 4. ARCHITECTURE-SPECIFIC HARDWARE TUNING
-    # -----------------------------------------------------------------------
     if(GEODE_TARGET_PLATFORM STREQUAL "Android32")
         target_compile_options(${PROJECT_NAME} PRIVATE
             -march=armv7-a
@@ -81,14 +101,18 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
             -mthumb
         )
     elseif(GEODE_TARGET_PLATFORM STREQUAL "Android64")
+        # Snapdragon 8 Elite (SM8750) — Oryon V2 core ISA
+        # Enables SVE/SVE2 SIMD, dotprod, i8mm, and bf16 without changing
+        # any physics or game logic.
         target_compile_options(${PROJECT_NAME} PRIVATE
-            -march=armv8-a+crc+crypto
+            -march=armv9-a+sve+sve2+dotprod+i8mm+bf16+crc+crypto+rcpc3
             -mbranch-protection=none
+            -mno-outline-atomics          # Oryon V2 has native LSE atomics
         )
     endif()
 
+
 elseif(MSVC)
-    # MSVC (Windows Builds)
     target_compile_options(${PROJECT_NAME} PRIVATE
         $<$<CONFIG:Release>:
             /O2
