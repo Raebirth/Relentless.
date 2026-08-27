@@ -43,24 +43,22 @@ add_library(${PROJECT_NAME} SHARED
     src/main.cpp
 )
 
-
 # ---------------------------------------------------------------------------
 # 3. PLATFORM-SPECIFIC SYSTEM LIBRARIES
 # ---------------------------------------------------------------------------
 
 # Windows: winmm.lib required for timeBeginPeriod / timeEndPeriod.
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE winmm)
+    target_link_libraries(${PROJECT_NAME} winmm)
 endif()
 
 # Android: link system libraries required by AndroidOptimizations.hpp
 #   libandroid — ANativeActivity, ALooper, AInputQueue structs/functions
 #   liblog     — __android_log_print (used internally by some NDK headers)
 if(ANDROID)
-    target_link_libraries(${PROJECT_NAME} PRIVATE android log)
+    target_link_libraries(${PROJECT_NAME} android log)
     message(STATUS "[Relentless] Linked libandroid + liblog for Android.")
 endif()
-
 
 # ---------------------------------------------------------------------------
 # 4. AGGRESSIVE COMPILER & LINKER FLAGS
@@ -110,7 +108,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
             -mno-outline-atomics          # Oryon V2 has native LSE atomics
         )
     endif()
-
 
 elseif(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE
