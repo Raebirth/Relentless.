@@ -1,7 +1,6 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
-#include <Geode/modify/GJBaseGameLayer.hpp>
-#include <Geode/modify/CCDirector.hpp>
+#include <Geode/modify/PlayerObject.hpp>   // same hooks as v1.0.0 — known safe
 #include <charconv>
 #include <chrono>
 #include <cstring>
@@ -9,24 +8,21 @@
 #include "InputQueue.hpp"
 #include "FrameSmoother.hpp"
 
-// Android-specific extreme optimizations (CCEGLView hook, CPU affinity,
-// physics dt stabilizer). Compiled only for Android targets.
+// Android: POSIX-only (CPU affinity). No new $modify hooks in this file.
 #ifdef GEODE_IS_ANDROID
 #  include "AndroidOptimizations.hpp"
 #endif
 
-using namespace geode::prelude;
-
-// ============================================================================
-// OS TIMER RESOLUTION — Windows only.
-// ============================================================================
+// Windows: OS timer resolution
 #ifdef GEODE_IS_WINDOWS
 #  include <windows.h>
 #  include <timeapi.h>
 #endif
 
+using namespace geode::prelude;
+
 // ============================================================================
-// HOT-SETTING CACHE — avoids touching Mod::get() / disk inside the frame loop
+// HOT-SETTING CACHE
 // ============================================================================
 namespace PerformanceCache {
     inline bool s_showStats = false;
@@ -37,11 +33,9 @@ namespace PerformanceCache {
 // MOD LIFECYCLE
 // ============================================================================
 $on_mod(Loaded) {
-    // Seed caches immediately (disk read happens once here, never per-frame)
     PerformanceCache::s_showStats = Mod::get()->getSettingValue<bool>("show-stats");
     PerformanceCache::s_showFps   = Mod::get()->getSettingValue<bool>("show-fps");
 
-    // Keep caches in sync whenever the user changes settings at runtime
     listenForSettingChanges<bool>("show-stats", +[](bool v) {
         PerformanceCache::s_showStats = v;
     });
@@ -55,39 +49,51 @@ $on_mod(Loaded) {
 #endif
 
 #ifdef GEODE_IS_ANDROID
-    // Must run on the main thread — $on_mod(Loaded) guarantees this.
+    // Pure POSIX — CPU affinity + RT scheduling. Cannot crash on load.
     androidInit();
 #endif
 }
 
 // ============================================================================
-// FRAME-TIMING HOOK — feeds FrameSmoother for accurate FPS display.
+// INPUT QUEUE PRODUCER — PlayerObject hooks (v1.0.0-safe, confirmed working)
+//
+// We use PlayerObject::pushButton / releaseButton because these are in
+// Geode's Android bindings and worked in v1.0.0. GJBaseGameLayer::handleButton
+// was REMOVED after it caused crashes — it may not exist in GD 2.2081 Android.
+//
+// Benefit: every button event is timestamped with a monotonic nanosecond
+// clock and pushed into the lock-free SPSC queue for future consumers.
 // ============================================================================
-class $modify(SmoothDirector, CCDirector) {
-    void drawScene() {
-        FrameSmoother::update(this->getDeltaTime());
-        CCDirector::drawScene();
-    }
-};
-
-// ============================================================================
-// INPUT DISPATCH HOOK — earliest possible game-side interception.
-// ============================================================================
-class $modify(FastGameLayer, GJBaseGameLayer) {
-    void handleButton(bool push, int button, bool isPlayer1) {
-        // O(1) enqueue — no allocation, no lock, no branch on full (drops silently)
+class $modify(FastPlayerObject, PlayerObject) {
+    void pushButton(PlayerButton btn) {
         g_inputQueue.try_push({
-            static_cast<PlayerButton>(button),
-            push,
+            btn,
+            /*isPress=*/true,
             static_cast<double>(
                 std::chrono::steady_clock::now().time_since_epoch().count())
         });
-        GJBaseGameLayer::handleButton(push, button, isPlayer1);
+        PlayerObject::pushButton(btn);
+    }
+
+    void releaseButton(PlayerButton btn) {
+        g_inputQueue.try_push({
+            btn,
+            /*isPress=*/false,
+            static_cast<double>(
+                std::chrono::steady_clock::now().time_since_epoch().count())
+        });
+        PlayerObject::releaseButton(btn);
     }
 };
 
 // ============================================================================
-// OPTIMIZED PLAY LAYER — zero-allocation stat rendering
+// OPTIMIZED PLAY LAYER
+//
+// Uses ONLY PlayLayer hooks — the same target class as v1.0.0.
+// Removed from previous crashing versions:
+//   • m_uiLayer usage — reverted to this->addChild (safe, no offset lookup)
+//   • CCDirector::drawScene hook — replaced by tracking dt in update()
+//   • GJBaseGameLayer::handleButton hook — replaced by PlayerObject hooks above
 // ============================================================================
 class $modify(OptimizedPlayLayer, PlayLayer) {
     struct Fields {
@@ -99,8 +105,6 @@ class $modify(OptimizedPlayLayer, PlayLayer) {
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
         if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
 
-        // Refresh caches — PlayLayer::init runs on the main thread so this
-        // is a one-time disk read, safe here but never in update().
         PerformanceCache::s_showStats = Mod::get()->getSettingValue<bool>("show-stats");
         PerformanceCache::s_showFps   = Mod::get()->getSettingValue<bool>("show-fps");
 
@@ -108,13 +112,12 @@ class $modify(OptimizedPlayLayer, PlayLayer) {
         label->setID("stats-label"_spr);
         label->setAnchorPoint({0.0f, 0.0f});
         label->setScale(0.4f);
+        label->setPosition({10.0f, 10.0f});
         label->setVisible(PerformanceCache::s_showStats);
 
-        // Parent to m_uiLayer so the label lives in screen-space.
-        // Falls back to PlayLayer itself in case m_uiLayer is somehow null.
-        CCLayer* host = m_uiLayer ? m_uiLayer : static_cast<CCLayer*>(this);
-        label->setPosition({10.0f, 10.0f});
-        host->addChild(label, 100);
+        // Use this directly — same as v1.0.0. m_uiLayer removed:
+        // its member offset may differ on Android, causing addChild to crash.
+        this->addChild(label, 100);
 
         m_fields->m_statsLabel = label;
         return true;
@@ -122,14 +125,20 @@ class $modify(OptimizedPlayLayer, PlayLayer) {
 
     void update(float dt) {
 #ifdef GEODE_IS_ANDROID
-        // Physics dt stabilizer — replaces the removed CCScheduler hook.
+        // Physics dt stabilizer. Replaces the removed CCScheduler hook.
+        // Caps runaway dt from lag spikes without changing TPS.
         constexpr float kMaxDt = 1.0f / 30.0f;
         constexpr float kMinDt = 1.0f / 1000.0f;
         dt = (dt > kMaxDt) ? kMaxDt : (dt < kMinDt ? kMinDt : dt);
 #endif
+
+        // Feed FrameSmoother with this frame's (clamped) delta.
+        // Replaces the removed CCDirector::drawScene hook.
+        FrameSmoother::update(dt);
+
         PlayLayer::update(dt);
 
-        // Fast path: stats are hidden — just ensure the label is invisible.
+        // ---- Fast path: stats hidden ----
         if (!PerformanceCache::s_showStats) [[likely]] {
             CCLabelBMFont* lbl = m_fields->m_statsLabel;
             if (lbl && lbl->isVisible()) lbl->setVisible(false);
@@ -149,10 +158,10 @@ class $modify(OptimizedPlayLayer, PlayLayer) {
         m_fields->m_lastX = posX;
         m_fields->m_lastY = posY;
 
-        // Stack-only string formatting — 0 heap allocations
+        // Stack-only formatting — 0 heap allocations
         char  buf[128];
         char* p   = buf;
-        char* end = buf + sizeof(buf) - 1; // reserve 1 byte for null terminator
+        char* end = buf + sizeof(buf) - 1;
 
         auto lit = [&](const char* s, size_t n) noexcept {
             std::memcpy(p, s, n);
