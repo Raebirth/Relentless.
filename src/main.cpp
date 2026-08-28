@@ -1,192 +1,237 @@
-#pragma once
-#ifdef GEODE_IS_ANDROID
-
-// ============================================================================
-// AndroidOptimizations.hpp
-// Target: ROG Phone 9 — Snapdragon 8 Elite (SM8750), Android 14+
-//
-// Implements four extreme Android-specific optimizations:
-//   1. Earliest-possible native touch intercept (practical AInputQueue bypass)
-//   2. Zero touch slop at the Cocos2d-x level
-//   3. CPU core affinity — Oryon V2 Prime core pinning
-//   4. Physics dt stabilizer — consistent timing under frame-rate variance
-//
-// All optimizations are display/timing/thread-level only.
-// TPS, game speed, and physics coefficients are NEVER modified.
-// ============================================================================
-
 #include <Geode/Geode.hpp>
-#include <Geode/modify/CCEGLView.hpp>
-#include <Geode/modify/CCScheduler.hpp>
-
-#include <fcntl.h>
-#include <pthread.h>
-#include <sched.h>
-#include <sys/syscall.h>
-#include <time.h>
-#include <unistd.h>
-#include <cstdio>
-#include <cstdlib>
+#include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/GJBaseGameLayer.hpp>
+#include <Geode/modify/CCDirector.hpp>
+#include <charconv>
+#include <chrono>
 #include <cstring>
-#include <cerrno>
 
 #include "InputQueue.hpp"
+#include "FrameSmoother.hpp"
+
+// Android-specific extreme optimizations (CCEGLView hook, CPU affinity,
+// physics dt stabilizer). Compiled only for Android targets.
+#ifdef GEODE_IS_ANDROID
+#  include "AndroidOptimizations.hpp"
+#endif
+
 
 using namespace geode::prelude;
 
 // ============================================================================
-// UTILITY — CLOCK_MONOTONIC nanosecond timestamp
+// OS TIMER RESOLUTION — Windows only.
 //
-// CLOCK_MONOTONIC is the correct clock for input timestamping on Android:
-//   • Never steps backward (unlike CLOCK_REALTIME during NTP sync)
-//   • Never adjusted by daylight-saving or timezone changes
-//   • Implemented in the vDSO on ARM64 — no syscall overhead
+//  timeBeginPeriod(1) drops the Windows scheduler quantum from the default
+//  ~15.6 ms to 1 ms. This is a system-wide setting that reverts automatically
+//  when the process exits. It is NOT a game speed change — it only affects
+//  how precisely the OS can wake up the process after a sleep/yield, reducing
+//  systemic input latency by up to ~14 ms on affected hardware.
+//
+//  This technique is used by virtually every competitive PC game and many
+//  Geode mods. It does not violate Demon List or any rating list rules.
 // ============================================================================
-namespace mono {
-    [[nodiscard]] inline double nowNs() noexcept {
-        struct timespec ts;
-        ::clock_gettime(CLOCK_MONOTONIC, &ts);
-        return static_cast<double>(ts.tv_sec) * 1.0e9
-             + static_cast<double>(ts.tv_nsec);
-    }
+#ifdef GEODE_IS_WINDOWS
+#  include <windows.h>
+#  include <timeapi.h>
+#endif
+
+// ============================================================================
+// HOT-SETTING CACHE — avoids touching Mod::get() / disk inside the frame loop
+// ============================================================================
+namespace PerformanceCache {
+    inline bool s_showStats = false;
+    inline bool s_showFps   = false;
 }
 
 // ============================================================================
-// OPTIMIZATION 1 & 2 — Earliest Native Touch Intercept + Zero Touch Slop
+// MOD LIFECYCLE
 // ============================================================================
-class $modify(FastEGLView, CCEGLView) {
+$on_mod(Loaded) {
+    // Seed caches immediately (disk read happens once here, never per-frame)
+    PerformanceCache::s_showStats = Mod::get()->getSettingValue<bool>("show-stats");
+    PerformanceCache::s_showFps   = Mod::get()->getSettingValue<bool>("show-fps");
 
-    // ACTION_DOWN / POINTER_DOWN — finger touches screen
-    void handleTouchesBegin(int num, int ids[], float xs[], float ys[], double timestamp) {
-        const double ts = mono::nowNs();
-        for (int i = 0; i < num; ++i) {
-            g_inputQueue.try_push({PlayerButton::Jump, /*isPress=*/true, ts});
-        }
-        // Always forward — we enrich the pipeline, not replace it
-        CCEGLView::handleTouchesBegin(num, ids, xs, ys, timestamp);
-    }
+    // Keep caches in sync whenever the user changes settings at runtime
+    listenForSettingChanges<bool>("show-stats", +[](bool v) {
+        PerformanceCache::s_showStats = v;
+    });
+    listenForSettingChanges<bool>("show-fps", +[](bool v) {
+        PerformanceCache::s_showFps = v;
+    });
 
-    // ACTION_UP / POINTER_UP — finger lifts
-    void handleTouchesEnd(int num, int ids[], float xs[], float ys[], double timestamp) {
-        const double ts = mono::nowNs();
-        for (int i = 0; i < num; ++i) {
-            g_inputQueue.try_push({PlayerButton::Jump, /*isPress=*/false, ts});
-        }
-        CCEGLView::handleTouchesEnd(num, ids, xs, ys, timestamp);
-    }
+#ifdef GEODE_IS_WINDOWS
+    timeBeginPeriod(1);
+    log::info("[Repentless] Windows timer resolution set to 1 ms.");
+#endif
 
-    // ACTION_CANCEL — treat as release (e.g. notification drawer pulled down)
-    void handleTouchesCancel(int num, int ids[], float xs[], float ys[], double timestamp) {
-        const double ts = mono::nowNs();
-        for (int i = 0; i < num; ++i) {
-            g_inputQueue.try_push({PlayerButton::Jump, /*isPress=*/false, ts});
-        }
-        CCEGLView::handleTouchesCancel(num, ids, xs, ys, timestamp);
+#ifdef GEODE_IS_ANDROID
+    // Must run on the main thread — $on_mod(Loaded) guarantees this.
+    androidInit();
+#endif
+}
+
+
+$on_mod(Unloaded) {
+#ifdef GEODE_IS_WINDOWS
+    timeEndPeriod(1);
+    log::info("[Repentless] Windows timer resolution restored.");
+#endif
+}
+
+// ============================================================================
+// FRAME-TIMING HOOK — feeds FrameSmoother for accurate FPS display.
+//
+//  Hooks CCDirector::drawScene which fires exactly once per rendered frame,
+//  before any game logic or rendering runs. getDeltaTime() returns the raw
+//  elapsed seconds since the previous frame — fed into the EMA smoother.
+//  Physics dt is NOT touched or modified in any way.
+// ============================================================================
+class $modify(SmoothDirector, CCDirector) {
+    void drawScene() {
+        FrameSmoother::update(this->getDeltaTime());
+        CCDirector::drawScene();
     }
 };
 
 // ============================================================================
-// OPTIMIZATION 3 — CPU Core Affinity (Thread Pinning)
+// INPUT DISPATCH HOOK — earliest possible game-side interception.
+//
+//  GJBaseGameLayer::handleButton is the single function the game calls for
+//  every player input (keyboard, mobile tap, controller). By hooking it here
+//  — above PlayerObject — we capture the event as early as the game engine
+//  delivers it and enqueue it into the lock-free queue with a high-resolution
+//  timestamp before passing control to the original handler.
+//
+//  This replaces the old FastPlayerObject approach which was a no-op:
+//  pushButton / releaseButton just called super and added an extra vtable
+//  hop on every input with zero benefit.
+//
+//  Queue: g_inputQueue (LockFreeSPSCQueue<InputEvent, 256>)
+//    Producer: this hook (game/input thread)
+//    Consumer: any future frame-interpolation or analytics system
 // ============================================================================
-namespace ThreadAffinity {
-
-[[nodiscard]] inline long readCpuMaxFreqKHz(int cpu) noexcept {
-    char path[96];
-    std::snprintf(path, sizeof(path),
-        "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", cpu);
-    int fd = ::open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0) return 0L;
-    char buf[24];
-    ssize_t n = ::read(fd, buf, sizeof(buf) - 1);
-    ::close(fd);
-    if (n <= 0) return 0L;
-    buf[n] = '\0';
-    return std::atol(buf);
-}
-
-inline void pinToHighPerformanceCores() noexcept {
-    constexpr int kMaxCpus = 16;
-    long  freqs[kMaxCpus] = {};
-    long  maxFreq         = 0L;
-    int   numOnline       = 0;
-
-    for (int i = 0; i < kMaxCpus; ++i) {
-        long f = readCpuMaxFreqKHz(i);
-        if (f > 0L) {
-            freqs[i] = f;
-            if (f > maxFreq) maxFreq = f;
-            numOnline = i + 1;
-        }
+class $modify(FastGameLayer, GJBaseGameLayer) {
+    void handleButton(bool push, int button, bool isPlayer1) {
+        // O(1) enqueue — no allocation, no lock, no branch on full (drops silently)
+        g_inputQueue.try_push({
+            static_cast<PlayerButton>(button),
+            push,
+            static_cast<double>(
+                std::chrono::steady_clock::now().time_since_epoch().count())
+        });
+        GJBaseGameLayer::handleButton(push, button, isPlayer1);
     }
-
-    cpu_set_t mask;
-    CPU_ZERO(&mask);
-
-    if (maxFreq > 0L) {
-        for (int i = 0; i < numOnline; ++i) {
-            if (freqs[i] == maxFreq) {
-                CPU_SET(i, &mask);
-                log::info("[Relentless] Affinity: CPU {} @ {} kHz", i, maxFreq);
-            }
-        }
-    } else {
-        // Hard-coded fallback for Snapdragon 8 Elite
-        CPU_SET(6, &mask);
-        CPU_SET(7, &mask);
-        log::warn("[Relentless] Affinity: sysfs unreadable, falling back to CPU 6–7.");
-    }
-
-    // Apply to calling thread (main game thread)
-    pid_t tid = static_cast<pid_t>(::syscall(SYS_gettid));
-    if (::sched_setaffinity(tid, sizeof(mask), &mask) == 0) {
-        log::info("[Relentless] Thread {} pinned to prime core(s).", tid);
-    } else {
-        log::warn("[Relentless] sched_setaffinity failed (errno {}). "
-                  "Try enabling ASUS Armoury Crate performance mode.", errno);
-    }
-
-    // Attempt real-time scheduling: SCHED_FIFO → SCHED_RR → normal
-    struct sched_param param{};
-    param.sched_priority = ::sched_get_priority_max(SCHED_FIFO);
-    if (::pthread_setschedparam(::pthread_self(), SCHED_FIFO, &param) == 0) {
-        log::info("[Relentless] Scheduling: SCHED_FIFO (real-time, prio {}).",
-                  param.sched_priority);
-        return;
-    }
-    param.sched_priority = ::sched_get_priority_max(SCHED_RR);
-    if (::pthread_setschedparam(::pthread_self(), SCHED_RR, &param) == 0) {
-        log::info("[Relentless] Scheduling: SCHED_RR (round-robin RT, prio {}).",
-                  param.sched_priority);
-        return;
-    }
-    log::warn("[Relentless] RT scheduling unavailable — continuing with SCHED_OTHER.");
-}
-
-} // namespace ThreadAffinity
+};
 
 // ============================================================================
-// OPTIMIZATION 4 — Physics Timing Stabilizer (Fixed-dt Clamping)
+// OPTIMIZED PLAY LAYER — zero-allocation stat rendering
+//
+//  Key optimizations vs. the previous version:
+//    1. Stats label is a child of m_uiLayer (screen-space) instead of
+//       PlayLayer itself (world-space). This means the label is immune to
+//       camera shake and no per-frame matrix transform is applied to it.
+//    2. Dirty check: label string is only re-written when the player moves.
+//    3. All string formatting uses stack buffers + std::to_chars: 0 heap
+//       allocations in the entire update path.
+//    4. Optional FPS counter appended to the same stack buffer at no
+//       extra allocation cost.
+//    5. [[likely]] / [[unlikely]] attributes guide branch predictor.
 // ============================================================================
-class $modify(StableScheduler, CCScheduler) {
+class $modify(OptimizedPlayLayer, PlayLayer) {
+    struct Fields {
+        CCLabelBMFont* m_statsLabel = nullptr;
+        float          m_lastX      = -9999.0f;
+        float          m_lastY      = -9999.0f;
+    };
+
+    bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
+        if (!PlayLayer::init(level, useReplay, dontCreateObjects)) return false;
+
+        // Refresh caches — PlayLayer::init runs on the main thread so this
+        // is a one-time disk read, safe here but never in update().
+        PerformanceCache::s_showStats = Mod::get()->getSettingValue<bool>("show-stats");
+        PerformanceCache::s_showFps   = Mod::get()->getSettingValue<bool>("show-fps");
+
+        auto* label = CCLabelBMFont::create("", "bigFont.fnt");
+        label->setID("stats-label"_spr);
+        label->setAnchorPoint({0.0f, 0.0f});
+        label->setScale(0.4f);
+        label->setVisible(PerformanceCache::s_showStats);
+
+        // Parent to m_uiLayer so the label lives in screen-space.
+        // Falls back to PlayLayer itself in case m_uiLayer is somehow null.
+        CCLayer* host = m_uiLayer ? m_uiLayer : static_cast<CCLayer*>(this);
+        label->setPosition({10.0f, 10.0f});
+        host->addChild(label, 100);
+
+        m_fields->m_statsLabel = label;
+        return true;
+    }
+
     void update(float dt) {
+#ifdef GEODE_IS_ANDROID
+        // Physics dt stabilizer — replaces the removed CCScheduler hook.
+        //
+        // Clamps dt before it reaches PlayLayer's physics accumulator.
+        // kMaxDt = 1/30 s: any single frame longer than ~33 ms (severe stall)
+        //   is silently capped. A brief visual stutter occurs instead of a
+        //   physics "pop" that would snap the player across the level.
+        // kMinDt = 1/1000 s: guards against near-zero deltas on some ROMs.
+        // This does NOT change TPS — it only limits extreme per-frame spikes.
         constexpr float kMaxDt = 1.0f / 30.0f;
         constexpr float kMinDt = 1.0f / 1000.0f;
+        dt = (dt > kMaxDt) ? kMaxDt : (dt < kMinDt ? kMinDt : dt);
+#endif
+        PlayLayer::update(dt);
 
-        const float safe = (dt > kMaxDt) ? kMaxDt
-                         : (dt < kMinDt) ? kMinDt
-                         :                 dt;
+        // Fast path: stats are hidden — just ensure the label is invisible.
+        if (!PerformanceCache::s_showStats) [[likely]] {
+            CCLabelBMFont* lbl = m_fields->m_statsLabel;
+            if (lbl && lbl->isVisible()) lbl->setVisible(false);
+            return;
+        }
 
-        CCScheduler::update(safe);
+        CCLabelBMFont* label = m_fields->m_statsLabel;
+        if (!label || !m_player1) [[unlikely]] return;
+
+        if (!label->isVisible()) label->setVisible(true);
+
+        const float posX = m_player1->m_position.x;
+        const float posY = m_player1->m_position.y;
+
+        // Dirty check — skip string rebuild + GPU upload when player is still.
+        if (posX == m_fields->m_lastX && posY == m_fields->m_lastY) [[likely]] return;
+        m_fields->m_lastX = posX;
+        m_fields->m_lastY = posY;
+
+        // ----------------------------------------------------------------
+        // Stack-only string formatting — 0 heap allocations
+        //
+        //  Worst-case output:  "X: -99999.99 | Y: -99999.99 | FPS: 9999\0"
+        //  That is 45 chars — safely within the 128-byte buffer.
+        // ----------------------------------------------------------------
+        char  buf[128];
+        char* p   = buf;
+        char* end = buf + sizeof(buf) - 1; // reserve 1 byte for null terminator
+
+        // Helper: copy a string literal into the buffer
+        auto lit = [&](const char* s, size_t n) noexcept {
+            std::memcpy(p, s, n);
+            p += n;
+        };
+
+        { constexpr char t[] = "X: ";    lit(t, sizeof(t) - 1); }
+        p = std::to_chars(p, end, posX, std::chars_format::fixed, 2).ptr;
+
+        { constexpr char t[] = " | Y: "; lit(t, sizeof(t) - 1); }
+        p = std::to_chars(p, end, posY, std::chars_format::fixed, 2).ptr;
+
+        if (PerformanceCache::s_showFps) {
+            { constexpr char t[] = " | FPS: "; lit(t, sizeof(t) - 1); }
+            p = std::to_chars(p, end, FrameSmoother::getAverageFPS()).ptr;
+        }
+
+        *p = '\0';
+        label->setString(buf);
     }
 };
-
-// ============================================================================
-// ANDROID INIT — must be called from the main thread inside $on_mod(Loaded)
-// ============================================================================
-inline void androidInit() noexcept {
-    log::info("[Relentless] Applying ROG Phone 9 Android optimizations…");
-    ThreadAffinity::pinToHighPerformanceCores();
-    log::info("[Relentless] Android optimizations applied.");
-}
-
-#endif // GEODE_IS_ANDROID
