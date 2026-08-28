@@ -31,13 +31,6 @@ endif()
 
 # ---------------------------------------------------------------------------
 # 2. SOURCE & TARGET DEFINITIONS
-#
-#  Headers (auto-discovered by the compiler, listed for documentation):
-#    src/LockFreeQueue.hpp       — wait-free SPSC ring buffer
-#    src/InputQueue.hpp          — typed InputEvent + global g_inputQueue
-#    src/FrameSmoother.hpp       — integer EMA FPS counter
-#    src/AndroidOptimizations.hpp— CCEGLView hook, CPU affinity, dt stabilizer
-#                                  (compiled only for Android targets)
 # ---------------------------------------------------------------------------
 add_library(${PROJECT_NAME} SHARED
     src/main.cpp
@@ -46,18 +39,9 @@ add_library(${PROJECT_NAME} SHARED
 # ---------------------------------------------------------------------------
 # 3. PLATFORM-SPECIFIC SYSTEM LIBRARIES
 # ---------------------------------------------------------------------------
-
 # Windows: winmm.lib required for timeBeginPeriod / timeEndPeriod.
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} winmm)
-endif()
-
-# Android: link system libraries required by AndroidOptimizations.hpp
-#   libandroid — ANativeActivity, ALooper, AInputQueue structs/functions
-#   liblog     — __android_log_print (used internally by some NDK headers)
-if(ANDROID)
-    target_link_libraries(${PROJECT_NAME} android log)
-    message(STATUS "[Relentless] Linked libandroid + liblog for Android.")
+    target_link_libraries(${PROJECT_NAME} PRIVATE winmm)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -99,15 +83,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
             -mthumb
         )
     elseif(GEODE_TARGET_PLATFORM STREQUAL "Android64")
-        # Snapdragon 8 Elite (SM8750) — Oryon V2 core ISA
-        # Enables SVE/SVE2 SIMD, dotprod, i8mm, and bf16 without changing
-        # any physics or game logic.
+        # Safe baseline for broad Android arm64 compatibility.
         target_compile_options(${PROJECT_NAME} PRIVATE
-            -march=armv9-a+sve+sve2+dotprod+i8mm+bf16+crc+crypto+rcpc3
+            -march=armv8-a+crc+crypto
             -mbranch-protection=none
-            -mno-outline-atomics          # Oryon V2 has native LSE atomics
         )
     endif()
+
 
 elseif(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE
