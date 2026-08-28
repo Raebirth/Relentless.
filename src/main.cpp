@@ -1,19 +1,10 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
-#include <Geode/modify/PlayerObject.hpp>   // same hooks as v1.0.0 — known safe
 #include <charconv>
-#include <chrono>
 #include <cstring>
 
-#include "InputQueue.hpp"
-#include "FrameSmoother.hpp"
-
-// Android: POSIX-only (CPU affinity). No new $modify hooks in this file.
-#ifdef GEODE_IS_ANDROID
-#  include "AndroidOptimizations.hpp"
-#endif
-
-// Windows: OS timer resolution
+// Windows only: 1 ms OS timer resolution for tighter sleep/yield precision.
+// Does NOT change game speed or physics. No equivalent needed on Android.
 #ifdef GEODE_IS_WINDOWS
 #  include <windows.h>
 #  include <timeapi.h>
@@ -21,17 +12,17 @@
 
 using namespace geode::prelude;
 
-// ============================================================================
-// HOT-SETTING CACHE
-// ============================================================================
+// ---------------------------------------------------------------------------
+// Setting cache — read once, never inside the per-frame hot path.
+// ---------------------------------------------------------------------------
 namespace PerformanceCache {
     inline bool s_showStats = false;
     inline bool s_showFps   = false;
 }
 
-// ============================================================================
-// MOD LIFECYCLE
-// ============================================================================
+// ---------------------------------------------------------------------------
+// Mod lifecycle
+// ---------------------------------------------------------------------------
 $on_mod(Loaded) {
     PerformanceCache::s_showStats = Mod::get()->getSettingValue<bool>("show-stats");
     PerformanceCache::s_showFps   = Mod::get()->getSettingValue<bool>("show-fps");
@@ -47,59 +38,18 @@ $on_mod(Loaded) {
     timeBeginPeriod(1);
     log::info("[Relentless] Windows timer resolution set to 1 ms.");
 #endif
-
-#ifdef GEODE_IS_ANDROID
-    // Pure POSIX — CPU affinity + RT scheduling. Cannot crash on load.
-    androidInit();
-#endif
 }
 
-// ============================================================================
-// INPUT QUEUE PRODUCER — PlayerObject hooks (v1.0.0-safe, confirmed working)
-//
-// We use PlayerObject::pushButton / releaseButton because these are in
-// Geode's Android bindings and worked in v1.0.0. GJBaseGameLayer::handleButton
-// was REMOVED after it caused crashes — it may not exist in GD 2.2081 Android.
-//
-// Benefit: every button event is timestamped with a monotonic nanosecond
-// clock and pushed into the lock-free SPSC queue for future consumers.
-// ============================================================================
-class $modify(FastPlayerObject, PlayerObject) {
-    void pushButton(PlayerButton btn) {
-        g_inputQueue.try_push({
-            btn,
-            /*isPress=*/true,
-            static_cast<double>(
-                std::chrono::steady_clock::now().time_since_epoch().count())
-        });
-        PlayerObject::pushButton(btn);
-    }
-
-    void releaseButton(PlayerButton btn) {
-        g_inputQueue.try_push({
-            btn,
-            /*isPress=*/false,
-            static_cast<double>(
-                std::chrono::steady_clock::now().time_since_epoch().count())
-        });
-        PlayerObject::releaseButton(btn);
-    }
-};
-
-// ============================================================================
-// OPTIMIZED PLAY LAYER
-//
-// Uses ONLY PlayLayer hooks — the same target class as v1.0.0.
-// Removed from previous crashing versions:
-//   • m_uiLayer usage — reverted to this->addChild (safe, no offset lookup)
-//   • CCDirector::drawScene hook — replaced by tracking dt in update()
-//   • GJBaseGameLayer::handleButton hook — replaced by PlayerObject hooks above
-// ============================================================================
+// ---------------------------------------------------------------------------
+// Play layer — stats label + FPS counter.
+// Only hooks PlayLayer (same target class as v1.0.0 — confirmed safe).
+// ---------------------------------------------------------------------------
 class $modify(OptimizedPlayLayer, PlayLayer) {
     struct Fields {
         CCLabelBMFont* m_statsLabel = nullptr;
         float          m_lastX      = -9999.0f;
         float          m_lastY      = -9999.0f;
+        float          m_smoothFps  = 60.0f;   // simple EMA, no external header
     };
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
@@ -114,31 +64,33 @@ class $modify(OptimizedPlayLayer, PlayLayer) {
         label->setScale(0.4f);
         label->setPosition({10.0f, 10.0f});
         label->setVisible(PerformanceCache::s_showStats);
-
-        // Use this directly — same as v1.0.0. m_uiLayer removed:
-        // its member offset may differ on Android, causing addChild to crash.
-        this->addChild(label, 100);
+        this->addChild(label, 100);  // same as v1.0.0 — no m_uiLayer
 
         m_fields->m_statsLabel = label;
         return true;
     }
 
     void update(float dt) {
+        // Track FPS BEFORE clamping so the display shows actual frame rate.
+        if (dt > 0.0001f) {
+            float instFps = 1.0f / dt;
+            // EMA with α=0.1: smooth without any allocations or atomics.
+            m_fields->m_smoothFps = m_fields->m_smoothFps * 0.9f + instFps * 0.1f;
+        }
+
 #ifdef GEODE_IS_ANDROID
-        // Physics dt stabilizer. Replaces the removed CCScheduler hook.
-        // Caps runaway dt from lag spikes without changing TPS.
+        // Prevent physics "pop" after a lag spike (GC pause, shader compile, etc.).
+        // Clamps the time step so a single slow frame doesn't simulate
+        // 8 normal frames of physics in one shot.
+        // This is NOT a TPS change — it only guards against extreme spikes.
         constexpr float kMaxDt = 1.0f / 30.0f;
         constexpr float kMinDt = 1.0f / 1000.0f;
         dt = (dt > kMaxDt) ? kMaxDt : (dt < kMinDt ? kMinDt : dt);
 #endif
 
-        // Feed FrameSmoother with this frame's (clamped) delta.
-        // Replaces the removed CCDirector::drawScene hook.
-        FrameSmoother::update(dt);
-
         PlayLayer::update(dt);
 
-        // ---- Fast path: stats hidden ----
+        // Fast path — stats off
         if (!PerformanceCache::s_showStats) [[likely]] {
             CCLabelBMFont* lbl = m_fields->m_statsLabel;
             if (lbl && lbl->isVisible()) lbl->setVisible(false);
@@ -147,18 +99,17 @@ class $modify(OptimizedPlayLayer, PlayLayer) {
 
         CCLabelBMFont* label = m_fields->m_statsLabel;
         if (!label || !m_player1) [[unlikely]] return;
-
         if (!label->isVisible()) label->setVisible(true);
 
         const float posX = m_player1->m_position.x;
         const float posY = m_player1->m_position.y;
 
-        // Dirty check — skip string rebuild + GPU upload when player is still.
+        // Skip rebuild when the player hasn't moved.
         if (posX == m_fields->m_lastX && posY == m_fields->m_lastY) [[likely]] return;
         m_fields->m_lastX = posX;
         m_fields->m_lastY = posY;
 
-        // Stack-only formatting — 0 heap allocations
+        // Zero-allocation stack formatting.
         char  buf[128];
         char* p   = buf;
         char* end = buf + sizeof(buf) - 1;
@@ -176,7 +127,8 @@ class $modify(OptimizedPlayLayer, PlayLayer) {
 
         if (PerformanceCache::s_showFps) {
             { constexpr char t[] = " | FPS: "; lit(t, sizeof(t) - 1); }
-            p = std::to_chars(p, end, FrameSmoother::getAverageFPS()).ptr;
+            auto fps = static_cast<uint32_t>(m_fields->m_smoothFps + 0.5f);
+            p = std::to_chars(p, end, fps).ptr;
         }
 
         *p = '\0';
