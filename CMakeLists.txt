@@ -39,7 +39,6 @@ add_library(${PROJECT_NAME} SHARED
 # ---------------------------------------------------------------------------
 # 3. PLATFORM-SPECIFIC SYSTEM LIBRARIES
 # ---------------------------------------------------------------------------
-# Windows: winmm.lib required for timeBeginPeriod / timeEndPeriod.
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE winmm)
 endif()
@@ -83,13 +82,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
             -mthumb
         )
     elseif(GEODE_TARGET_PLATFORM STREQUAL "Android64")
-        # Safe baseline for broad Android arm64 compatibility.
+        # rcpc3 removido para evitar crashes SIGILL en Snapdragon 8 Elite
         target_compile_options(${PROJECT_NAME} PRIVATE
             -march=armv8-a+crc+crypto
             -mbranch-protection=none
         )
     endif()
-
 
 elseif(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE
