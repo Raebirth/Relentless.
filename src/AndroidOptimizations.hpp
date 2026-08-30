@@ -26,34 +26,34 @@ inline double nowNs() noexcept {
 // ============================================================================
 class $modify(FastEGLView, CCEGLView) {
 
-    void handleTouchesBegin(int num, int* ids, float* xs, float* ys) {
+    void handleTouchesBegin(int num, int ids[], float xs[], float ys[], double timestamp) {
         if (num > 0 && ids != nullptr && xs != nullptr && ys != nullptr) [[likely]] {
             const double ts = mono::nowNs();
             for (int i = 0; i < num; ++i) {
                 g_inputQueue.try_push({ PlayerButton::Jump, /*isPress=*/true, ts });
             }
         }
-        CCEGLView::handleTouchesBegin(num, ids, xs, ys);
+        CCEGLView::handleTouchesBegin(num, ids, xs, ys, timestamp);
     }
 
-    void handleTouchesEnd(int num, int* ids, float* xs, float* ys) {
+    void handleTouchesEnd(int num, int ids[], float xs[], float ys[], double timestamp) {
         if (num > 0 && ids != nullptr && xs != nullptr && ys != nullptr) [[likely]] {
             const double ts = mono::nowNs();
             for (int i = 0; i < num; ++i) {
                 g_inputQueue.try_push({ PlayerButton::Jump, /*isPress=*/false, ts });
             }
         }
-        CCEGLView::handleTouchesEnd(num, ids, xs, ys);
+        CCEGLView::handleTouchesEnd(num, ids, xs, ys, timestamp);
     }
 
-    void handleTouchesCancelled(int num, int* ids, float* xs, float* ys) {
+    void handleTouchesCancel(int num, int ids[], float xs[], float ys[], double timestamp) {
         if (num > 0 && ids != nullptr && xs != nullptr && ys != nullptr) [[likely]] {
             const double ts = mono::nowNs();
             for (int i = 0; i < num; ++i) {
                 g_inputQueue.try_push({ PlayerButton::Jump, /*isPress=*/false, ts });
             }
         }
-        CCEGLView::handleTouchesCancelled(num, ids, xs, ys);
+        CCEGLView::handleTouchesCancel(num, ids, xs, ys, timestamp);
     }
 };
 
