@@ -44,21 +44,12 @@ $on_mod(Loaded) {
 
 #ifdef GEODE_IS_WINDOWS
     // Drop OS scheduler quantum from 15.6 ms → 1 ms.
-    // NOT a game-speed change — only affects sleep/yield precision.
     timeBeginPeriod(1);
     log::info("[Relentless] Windows timer resolution set to 1 ms.");
 #endif
 
 #ifdef GEODE_IS_ANDROID
     // Apply CPU affinity + SCHED_FIFO to the GL thread.
-    // Must be called from inside the mod's loaded callback (runs on GL thread).
     ThreadOptimizer::applyToCurrentThread();
-#endif
-}
-
-$on_mod(Unloaded) {
-#ifdef GEODE_IS_WINDOWS
-    timeEndPeriod(1);
-    log::info("[Relentless] Windows timer resolution restored.");
 #endif
 }
