@@ -17,13 +17,12 @@ endif()
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
 # ---------------------------------------------------------------------------
-# 1. SOURCE DEFINITIONS
+# 1. SOURCE DEFINITIONS (ThreadOptimizer eliminado para evitar violaciones Seccomp)
 # ---------------------------------------------------------------------------
 add_library(${PROJECT_NAME} SHARED
     src/main.cpp
     src/GameLoopHook.cpp
     src/DispatcherHook.cpp
-    src/ThreadOptimizer.cpp
 )
 
 # ---------------------------------------------------------------------------
@@ -34,7 +33,7 @@ if(WIN32)
 endif()
 
 # ---------------------------------------------------------------------------
-# 3. AGGRESSIVE COMPILER & LINKER FLAGS
+# 3. COMPILER & LINKER FLAGS
 # ---------------------------------------------------------------------------
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
 
@@ -74,15 +73,11 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
             -mthumb
         )
 
-    # Android 64-bit (arm64-v8a)
+    # Android 64-bit (arm64-v8a) compatible con Qualcomm Oryon V2
     elseif(GEODE_TARGET_PLATFORM STREQUAL "Android64")
         target_compile_options(${PROJECT_NAME} PRIVATE
-            -mcpu=cortex-a720
+            -march=armv8-a+crc+crypto
             -mbranch-protection=none
-            -flto=thin
-        )
-        target_link_options(${PROJECT_NAME} PRIVATE
-            -flto=thin
         )
     endif()
 
