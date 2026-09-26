@@ -1,23 +1,33 @@
 #pragma once
-#include <Geode/Geode.hpp>
-#include <chrono>
-#include "LockFreeQueue.hpp"
 
-using namespace geode::prelude;
+#include "LockFreeQueue.hpp"
+#include <Geode/Geode.hpp>  // PlayerButton
 
 // ============================================================================
-// INPUT EVENT — fits entirely in a single cache line slot (< 64 B)
+// InputEvent  —  one touch frame crossing the SPSC bridge.
+//
+// Kept 16 bytes (one ARMv9 vector lane) to fit 16 events in a single
+// 256-byte cache line fetch from m_buffer on the consumer side.
 // ============================================================================
 struct InputEvent {
-    PlayerButton btn;       // which button was pressed/released
-    bool         isPress;   // true = pushButton, false = releaseButton
-    double       timestamp; // steady_clock time point in nanoseconds
+    PlayerButton button;       // Which button was pressed
+    bool         isPress;      // true = began/press, false = ended/cancelled/release
+    bool         isPlayer2;    // false = left half / p1, true = right half / p2
+    uint8_t      _pad[2];      // align timestampNs to 8-byte boundary
+    double       timestampNs;  // CLOCK_MONOTONIC nanoseconds at JNI entry
 };
+static_assert(sizeof(InputEvent) == 16, "InputEvent must be 16 bytes.");
+static_assert(std::is_trivially_copyable_v<InputEvent>,
+              "InputEvent must be trivially copyable for LockFreeQueue.");
 
 // ============================================================================
-// GLOBAL SPSC QUEUE — 256 slots, power-of-two, zero allocation
+// g_inputQueue  —  the SPSC bridge between the producer and consumer.
 //
-//  Producer: GJBaseGameLayer::handleButton  (game/input thread)
-//  Consumer: any future frame-interpolation system or analytics
+// Capacity 256: at 240 Hz with up to 4 simultaneous touches, the queue
+// can absorb ~64 frames of buffered input before dropping.  In practice
+// the consumer drains it every frame so occupancy stays near 0–2.
+//
+// `inline` (C++17): ODR-safe single definition across all translation
+// units that include this header.  The linker collapses them to one symbol.
 // ============================================================================
-inline LockFreeSPSCQueue<InputEvent, 256> g_inputQueue;
+inline LockFreeQueue<InputEvent, 256> g_inputQueue;
