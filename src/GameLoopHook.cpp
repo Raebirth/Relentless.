@@ -13,11 +13,6 @@
 
 using namespace geode::prelude;
 
-namespace PerformanceCache {
-    extern bool s_showStats;
-    extern bool s_showFps;
-}
-
 #ifdef GEODE_IS_ANDROID
 namespace {
 [[nodiscard]] __attribute__((always_inline))
