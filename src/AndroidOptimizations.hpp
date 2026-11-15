@@ -1,8 +1,9 @@
 #pragma once
 
+#include <Geode/Geode.hpp>
+
 #ifdef GEODE_IS_ANDROID
 
-#include <Geode/Geode.hpp>
 #include <dlfcn.h>
 #include <sys/syscall.h>
 #include <unistd.h>
