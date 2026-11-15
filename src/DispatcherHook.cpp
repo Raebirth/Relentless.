@@ -9,9 +9,6 @@
 
 using namespace geode::prelude;
 
-// ---------------------------------------------------------------------------
-// Monotonic nanosecond clock via ARM vDSO.
-// ---------------------------------------------------------------------------
 namespace {
 
 [[nodiscard]] __attribute__((always_inline))
@@ -30,9 +27,6 @@ inline double monoNs() noexcept {
 
 } // anonymous namespace
 
-// ---------------------------------------------------------------------------
-// FastEGLView — Producer hook
-// ---------------------------------------------------------------------------
 class $modify(FastEGLView, CCEGLView) {
 
     void handleTouchesBegin(int num, int ids[], float xs[], float ys[], double timestamp) {
