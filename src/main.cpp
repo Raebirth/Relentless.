@@ -1,4 +1,5 @@
 #include <Geode/Geode.hpp>
+#include "GlobalState.hpp"
 
 #ifdef GEODE_IS_ANDROID
 #include "AndroidOptimizations.hpp"
@@ -10,11 +11,6 @@
 #endif
 
 using namespace geode::prelude;
-
-namespace PerformanceCache {
-    inline bool s_showStats = false;
-    inline bool s_showFps   = false;
-}
 
 $on_mod(Loaded) {
     PerformanceCache::s_showStats = Mod::get()->getSettingValue<bool>("show-stats");
