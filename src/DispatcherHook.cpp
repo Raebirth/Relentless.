@@ -1,6 +1,7 @@
+#include <Geode/Geode.hpp>
+
 #ifdef GEODE_IS_ANDROID
 
-#include <Geode/Geode.hpp>
 #include <Geode/modify/CCEGLView.hpp>
 #include <time.h>
 
