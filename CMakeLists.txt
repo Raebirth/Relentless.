@@ -1,13 +1,10 @@
 cmake_minimum_required(VERSION 3.21)
-project(Relentless VERSION 1.2.0 LANGUAGES CXX C)
+project(Relentless VERSION 1.3.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# ---------------------------------------------------------------------------
-# GEODE SDK DISCOVERY
-# ---------------------------------------------------------------------------
 if(NOT DEFINED ENV{GEODE_SDK})
     message(FATAL_ERROR "GEODE_SDK environment variable is not set.")
 else()
@@ -16,27 +13,19 @@ endif()
 
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
-# ---------------------------------------------------------------------------
-# 1. SOURCE DEFINITIONS (ThreadOptimizer eliminado para evitar violaciones Seccomp)
-# ---------------------------------------------------------------------------
 add_library(${PROJECT_NAME} SHARED
     src/main.cpp
     src/GameLoopHook.cpp
     src/DispatcherHook.cpp
 )
 
-# ---------------------------------------------------------------------------
-# 2. PLATFORM-SPECIFIC SYSTEM LIBRARIES
-# ---------------------------------------------------------------------------
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE winmm)
+elseif(ANDROID)
+    target_link_libraries(${PROJECT_NAME} PRIVATE dl)
 endif()
 
-# ---------------------------------------------------------------------------
-# 3. COMPILER & LINKER FLAGS
-# ---------------------------------------------------------------------------
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-
     target_compile_options(${PROJECT_NAME} PRIVATE
         $<$<CONFIG:Release>:
             -O3
@@ -64,7 +53,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         >
     )
 
-    # Android 32-bit (arm-v7a)
     if(GEODE_TARGET_PLATFORM STREQUAL "Android32")
         target_compile_options(${PROJECT_NAME} PRIVATE
             -march=armv7-a
@@ -72,8 +60,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
             -mfloat-abi=softfp
             -mthumb
         )
-
-    # Android 64-bit (arm64-v8a) compatible con Qualcomm Oryon V2
     elseif(GEODE_TARGET_PLATFORM STREQUAL "Android64")
         target_compile_options(${PROJECT_NAME} PRIVATE
             -march=armv8-a+crc+crypto
