@@ -1,7 +1,8 @@
 #include <Geode/Geode.hpp>
 
-// GameLoopHook.cpp gestiona los hooks de PlayLayer.
-// DispatcherHook.cpp gestiona CCEGLView (captura de toques en Android).
+#ifdef GEODE_IS_ANDROID
+#include "AndroidOptimizations.hpp"
+#endif
 
 #ifdef GEODE_IS_WINDOWS
 #  include <windows.h>
@@ -32,6 +33,7 @@ $on_mod(Loaded) {
 #endif
 
 #ifdef GEODE_IS_ANDROID
-    log::info("[Relentless] Engine hooks initialized successfully.");
+    ADPF::initForGLThread();
+    log::info("[Relentless] Engine hooks & ADPF initialized.");
 #endif
 }
