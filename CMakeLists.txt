@@ -19,10 +19,11 @@ add_library(${PROJECT_NAME} SHARED
     src/DispatcherHook.cpp
 )
 
+# Sintaxis plana requerida por GeodeFile.cmake (sin PRIVATE)
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE winmm)
+    target_link_libraries(${PROJECT_NAME} winmm)
 elseif(ANDROID)
-    target_link_libraries(${PROJECT_NAME} PRIVATE dl)
+    target_link_libraries(${PROJECT_NAME} dl)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
