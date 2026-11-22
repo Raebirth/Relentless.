@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(Relentless VERSION 1.3.0 LANGUAGES CXX C)
+project(Relentless VERSION 1.4.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,9 +17,9 @@ add_library(${PROJECT_NAME} SHARED
     src/main.cpp
     src/GameLoopHook.cpp
     src/DispatcherHook.cpp
+    src/ChronosHook.cpp
 )
 
-# Sintaxis plana requerida por GeodeFile.cmake (sin PRIVATE)
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} winmm)
 elseif(ANDROID)
