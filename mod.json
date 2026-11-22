@@ -10,10 +10,36 @@
     "developer": "Optimization Engineer",
     "description": "Hyper-optimized Geode mod with low-latency input and zero-allocation loops.",
     "settings": {
-        "show-stats": {
-            "name": "Show Stats",
-            "type": "bool",
-            "default": true
-        }
+    "show-stats": {
+        "type": "bool",
+        "name": "Mostrar Estadisticas",
+        "description": "Muestra coordenadas, FPS y telemetria Chronos en pantalla.",
+        "default": true
+    },
+    "show-fps": {
+        "type": "bool",
+        "name": "Mostrar FPS",
+        "description": "Muestra FPS suavizados en el HUD.",
+        "default": true
+    },
+    "chronos-substep": {
+        "type": "bool",
+        "name": "Chronos Sub-Step (Experimental)",
+        "description": "Divide los pasos de 240 TPS en el instante exacto del toque. Desactivar para modo 100% vanilla/AREDL.",
+        "default": true
+    },
+    "chronos-grid": {
+        "type": "int",
+        "name": "Subdivisiones por paso (0 = Continuo)",
+        "description": "0 = Continuo (720Hz+ nativo). 10 = Rejilla 0.1 de 240 TPS (2400Hz). 2 = 480Hz. 3 = 720Hz.",
+        "default": 0,
+        "min": 0,
+        "max": 10
+    },
+    "chronos-hud": {
+        "type": "bool",
+        "name": "Telemetria Chronos en HUD",
+        "description": "Muestra fraccion alpha, cortes ejecutados y fuente de reloj.",
+        "default": true
     }
 }
