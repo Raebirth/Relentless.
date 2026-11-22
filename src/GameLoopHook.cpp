@@ -1,5 +1,6 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <Geode/binding/LevelSettingsObject.hpp>
 #include <charconv>
 #include <cstring>
 
@@ -27,10 +28,11 @@ inline int64_t monoNsInt() noexcept {
 
 class $modify(GameLoopConsumer, PlayLayer) {
     struct Fields {
-        CCLabelBMFont* m_statsLabel = nullptr;
-        float          m_lastX      = -9999.0f;
-        float          m_lastY      = -9999.0f;
-        float          m_smoothFps  = 60.0f;
+        CCLabelBMFont* m_statsLabel     = nullptr;
+        float          m_lastX          = -9999.0f;
+        float          m_lastY          = -9999.0f;
+        float          m_smoothFps      = 60.0f;
+        uint64_t       m_lastSplitCount = 0;
     };
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
@@ -45,13 +47,19 @@ class $modify(GameLoopConsumer, PlayLayer) {
         auto* label = CCLabelBMFont::create("", "bigFont.fnt");
         label->setID("stats-label"_spr);
         label->setAnchorPoint({0.0f, 0.0f});
-        label->setScale(0.4f);
+        label->setScale(0.35f);
         label->setPosition({10.0f, 10.0f});
         label->setVisible(PerformanceCache::s_showStats);
         this->addChild(label, 100);
         m_fields->m_statsLabel = label;
 
         return true;
+    }
+
+    void pauseGame(bool p0) {
+        InputEvent discard;
+        while (g_inputQueue.try_pop(discard)) {}
+        PlayLayer::pauseGame(p0);
     }
 
     void onQuit() {
@@ -78,17 +86,13 @@ class $modify(GameLoopConsumer, PlayLayer) {
         dt = (dt > kMaxDt) ? kMaxDt : (dt < kMinDt ? kMinDt : dt);
 #endif
 
-        {
+        if (!PerformanceCache::s_chronosEnabled) {
+            const bool twoPlayer = (m_levelSettings != nullptr)
+                                 && m_levelSettings->m_twoPlayerMode;
             InputEvent ev;
             while (g_inputQueue.try_pop(ev)) [[unlikely]] {
-                PlayerObject* target = ev.isPlayer2 ? m_player2 : m_player1;
-                if (!target) [[unlikely]] continue;
-
-                if (ev.isPress) {
-                    target->pushButton(ev.button);
-                } else {
-                    target->releaseButton(ev.button);
-                }
+                const bool isPlayer1 = twoPlayer ? !ev.isPlayer2 : true;
+                this->handleButton(ev.isPress, static_cast<int>(ev.button), isPlayer1);
             }
         }
 
@@ -110,29 +114,47 @@ class $modify(GameLoopConsumer, PlayLayer) {
 
         const float posX = m_player1->m_position.x;
         const float posY = m_player1->m_position.y;
+        const uint64_t splits = ChronosTelemetry::totalSplitsSession;
 
-        if (posX == m_fields->m_lastX && posY == m_fields->m_lastY) [[likely]] return;
+        if (posX == m_fields->m_lastX
+            && posY == m_fields->m_lastY
+            && splits == m_fields->m_lastSplitCount) [[likely]] {
+            return;
+        }
         m_fields->m_lastX = posX;
         m_fields->m_lastY = posY;
+        m_fields->m_lastSplitCount = splits;
 
-        char  buf[96];
+        char  buf[160];
         char* p   = buf;
         char* end = buf + sizeof(buf) - 1;
 
         auto lit = [&](const char* s, std::size_t n) noexcept {
-            std::memcpy(p, s, n); p += n;
+            std::memcpy(p, s, n);
+            p += n;
         };
 
-        { constexpr char t[] = "X: "; lit(t, sizeof(t)-1); }
-        p = std::to_chars(p, end, posX, std::chars_format::fixed, 2).ptr;
-        { constexpr char t[] = " | Y: "; lit(t, sizeof(t)-1); }
-        p = std::to_chars(p, end, posY, std::chars_format::fixed, 2).ptr;
+        { constexpr char t[] = "X:"; lit(t, sizeof(t) - 1); }
+        p = std::to_chars(p, end, posX, std::chars_format::fixed, 1).ptr;
+        { constexpr char t[] = " Y:"; lit(t, sizeof(t) - 1); }
+        p = std::to_chars(p, end, posY, std::chars_format::fixed, 1).ptr;
 
         if (PerformanceCache::s_showFps) {
-            { constexpr char t[] = " | FPS: "; lit(t, sizeof(t)-1); }
+            { constexpr char t[] = " | "; lit(t, sizeof(t) - 1); }
             p = std::to_chars(p, end, static_cast<uint32_t>(m_fields->m_smoothFps + 0.5f)).ptr;
-            { constexpr char t[] = " | Q: "; lit(t, sizeof(t)-1); }
-            p = std::to_chars(p, end, static_cast<uint32_t>(g_inputQueue.size_approx())).ptr;
+            { constexpr char t[] = "FPS"; lit(t, sizeof(t) - 1); }
+        }
+
+        if (PerformanceCache::s_chronosHud && PerformanceCache::s_chronosEnabled) {
+            { constexpr char t[] = " | a:"; lit(t, sizeof(t) - 1); }
+            p = std::to_chars(p, end, ChronosTelemetry::lastAlpha, std::chars_format::fixed, 2).ptr;
+            { constexpr char t[] = " S:"; lit(t, sizeof(t) - 1); }
+            p = std::to_chars(p, end, ChronosTelemetry::lastSplitCount).ptr;
+            { constexpr char t[] = " "; lit(t, sizeof(t) - 1); }
+            const char* tag = ChronosTelemetry::tsSourceTag(
+                ChronosTelemetry::tsSource.load(std::memory_order_relaxed)
+            );
+            lit(tag, std::strlen(tag));
         }
 
         *p = '\0';
