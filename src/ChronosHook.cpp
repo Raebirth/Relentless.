@@ -74,7 +74,7 @@ class $modify(ChronosPhysicsHook, GJBaseGameLayer) {
         if (!GlobalState::g_inLevel.load(std::memory_order_acquire)) [[unlikely]] {
             return modDt;
         }
-        if (this != PlayLayer::get()) [[unlikely]] {
+        if (static_cast<GJBaseGameLayer*>(this) != static_cast<GJBaseGameLayer*>(PlayLayer::get())) [[unlikely]] {
             return modDt;
         }
 
@@ -123,7 +123,7 @@ class $modify(ChronosPhysicsHook, GJBaseGameLayer) {
             || !PerformanceCache::s_chronosEnabled
             || f->m_frameEventCount == 0
             || !GlobalState::g_inLevel.load(std::memory_order_acquire)
-            || this != PlayLayer::get()) [[likely]] {
+            || static_cast<GJBaseGameLayer*>(this) != static_cast<GJBaseGameLayer*>(PlayLayer::get())) [[likely]] {
             GJBaseGameLayer::processCommands(dt, isHalfTick, isLastTick);
             return;
         }
