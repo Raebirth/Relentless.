@@ -15,34 +15,28 @@ using namespace geode::prelude;
 $on_mod(Loaded) {
     auto* mod = Mod::get();
 
-    if (mod->hasSetting("show-stats")) {
-        PerformanceCache::s_showStats = mod->getSettingValue<bool>("show-stats");
-        listenForSettingChanges<bool>("show-stats", +[](bool v) {
-            PerformanceCache::s_showStats = v;
-        });
-    }
-    if (mod->hasSetting("show-fps")) {
-        PerformanceCache::s_showFps = mod->getSettingValue<bool>("show-fps");
-        listenForSettingChanges<bool>("show-fps", +[](bool v) {
-            PerformanceCache::s_showFps = v;
-        });
-    }
-    if (mod->hasSetting("chronos-substep")) {
-        PerformanceCache::s_chronosEnabled = mod->getSettingValue<bool>("chronos-substep");
-        listenForSettingChanges<bool>("chronos-substep", +[](bool v) {
-            PerformanceCache::s_chronosEnabled = v;
-        });
-    }
+    auto bindBool = [&](const char* key, bool& target) {
+        if (mod->hasSetting(key)) {
+            target = mod->getSettingValue<bool>(key);
+            listenForSettingChanges<bool>(key, [&target](bool v) {
+                target = v;
+            });
+        }
+    };
+
+    bindBool("show-stats",       PerformanceCache::s_showStats);
+    bindBool("show-fps",         PerformanceCache::s_showFps);
+    bindBool("chronos-substep",  PerformanceCache::s_chronosEnabled);
+    bindBool("chronos-hud",      PerformanceCache::s_chronosHud);
+    bindBool("vbo-orphaning",    PerformanceCache::s_vboOrphaning);
+    bindBool("empty-batch-cull", PerformanceCache::s_emptyBatchCull);
+    bindBool("particle-opt",     PerformanceCache::s_particleOpt);
+    bindBool("render-profiler",  PerformanceCache::s_renderProfiler);
+
     if (mod->hasSetting("chronos-grid")) {
         PerformanceCache::s_chronosGrid = mod->getSettingValue<int64_t>("chronos-grid");
         listenForSettingChanges<int64_t>("chronos-grid", +[](int64_t v) {
             PerformanceCache::s_chronosGrid = v;
-        });
-    }
-    if (mod->hasSetting("chronos-hud")) {
-        PerformanceCache::s_chronosHud = mod->getSettingValue<bool>("chronos-hud");
-        listenForSettingChanges<bool>("chronos-hud", +[](bool v) {
-            PerformanceCache::s_chronosHud = v;
         });
     }
 
@@ -53,6 +47,6 @@ $on_mod(Loaded) {
 
 #ifdef GEODE_IS_ANDROID
     ADPF::initForGLThread();
-    log::info("[Relentless] Chronos v4 prototype + ADPF initialized.");
+    log::info("[Relentless] v1.5 RenderOptimizer + Chronos + ADPF initialized.");
 #endif
 }
