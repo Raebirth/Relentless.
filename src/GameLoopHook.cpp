@@ -33,6 +33,7 @@ class $modify(GameLoopConsumer, PlayLayer) {
         float          m_lastY          = -9999.0f;
         float          m_smoothFps      = 60.0f;
         uint64_t       m_lastSplitCount = 0;
+        uint32_t       m_hudTick        = 0;
     };
 
     bool init(GJGameLevel* level, bool useReplay, bool dontCreateObjects) {
@@ -47,7 +48,7 @@ class $modify(GameLoopConsumer, PlayLayer) {
         auto* label = CCLabelBMFont::create("", "bigFont.fnt");
         label->setID("stats-label"_spr);
         label->setAnchorPoint({0.0f, 0.0f});
-        label->setScale(0.35f);
+        label->setScale(0.32f);
         label->setPosition({10.0f, 10.0f});
         label->setVisible(PerformanceCache::s_showStats);
         this->addChild(label, 100);
@@ -99,7 +100,9 @@ class $modify(GameLoopConsumer, PlayLayer) {
         PlayLayer::update(dt);
 
 #ifdef GEODE_IS_ANDROID
-        ADPF::reportFrameWork(monoNsInt() - frameStartNs);
+        const int64_t workNs = monoNsInt() - frameStartNs;
+        ADPF::reportFrameWork(workNs);
+        RenderTelemetry::lastUpdateMs += static_cast<float>(workNs) * 1.0e-6f;
 #endif
 
         if (!PerformanceCache::s_showStats) [[likely]] {
@@ -112,20 +115,27 @@ class $modify(GameLoopConsumer, PlayLayer) {
         if (!label || !m_player1) [[unlikely]] return;
         if (!label->isVisible()) label->setVisible(true);
 
+        // Actualiza el texto del HUD cada 4 frames (~46Hz a 185FPS) para no gastar CPU en CCLabelBMFont
+        const uint64_t splits = ChronosTelemetry::totalSplitsSession;
+        const bool newSplit = (splits != m_fields->m_lastSplitCount);
+        if (!newSplit && ((++m_fields->m_hudTick & 3u) != 0u)) [[likely]] {
+            return;
+        }
+        m_fields->m_lastSplitCount = splits;
+
         const float posX = m_player1->m_position.x;
         const float posY = m_player1->m_position.y;
-        const uint64_t splits = ChronosTelemetry::totalSplitsSession;
 
-        if (posX == m_fields->m_lastX
-            && posY == m_fields->m_lastY
-            && splits == m_fields->m_lastSplitCount) [[likely]] {
+        if (!newSplit
+            && !PerformanceCache::s_renderProfiler
+            && posX == m_fields->m_lastX
+            && posY == m_fields->m_lastY) [[likely]] {
             return;
         }
         m_fields->m_lastX = posX;
         m_fields->m_lastY = posY;
-        m_fields->m_lastSplitCount = splits;
 
-        char  buf[160];
+        char  buf[192];
         char* p   = buf;
         char* end = buf + sizeof(buf) - 1;
 
@@ -143,6 +153,14 @@ class $modify(GameLoopConsumer, PlayLayer) {
             { constexpr char t[] = " | "; lit(t, sizeof(t) - 1); }
             p = std::to_chars(p, end, static_cast<uint32_t>(m_fields->m_smoothFps + 0.5f)).ptr;
             { constexpr char t[] = "FPS"; lit(t, sizeof(t) - 1); }
+        }
+
+        if (PerformanceCache::s_renderProfiler) {
+            { constexpr char t[] = " | U:"; lit(t, sizeof(t) - 1); }
+            p = std::to_chars(p, end, RenderTelemetry::smoothUpdateMs, std::chars_format::fixed, 2).ptr;
+            { constexpr char t[] = " R:"; lit(t, sizeof(t) - 1); }
+            p = std::to_chars(p, end, RenderTelemetry::smoothRenderMs, std::chars_format::fixed, 2).ptr;
+            { constexpr char t[] = "ms"; lit(t, sizeof(t) - 1); }
         }
 
         if (PerformanceCache::s_chronosHud && PerformanceCache::s_chronosEnabled) {
