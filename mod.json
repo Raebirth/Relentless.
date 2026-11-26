@@ -9,39 +9,62 @@
     "name": "Relentless",
     "developer": "Optimization Engineer",
     "description": "Hyper-optimized Geode mod with low-latency input and zero-allocation loops.",
-    "settings": {
-    "show-stats": {
-        "type": "bool",
-        "name": "Mostrar Estadisticas",
-        "description": "Muestra coordenadas, FPS y telemetria Chronos en pantalla.",
-        "default": true
-    },
-    "show-fps": {
-        "type": "bool",
-        "name": "Mostrar FPS",
-        "description": "Muestra FPS suavizados en el HUD.",
-        "default": true
-    },
-    "chronos-substep": {
-        "type": "bool",
-        "name": "Chronos Sub-Step (Experimental)",
-        "description": "Divide los pasos de 240 TPS en el instante exacto del toque. Desactivar para modo 100% vanilla/AREDL.",
-        "default": true
-    },
-    "chronos-grid": {
-        "type": "int",
-        "name": "Subdivisiones por paso (0 = Continuo)",
-        "description": "0 = Continuo (720Hz+ nativo). 10 = Rejilla 0.1 de 240 TPS (2400Hz). 2 = 480Hz. 3 = 720Hz.",
-        "default": 0,
-        "min": 0,
-        "max": 10
-    },
-            "chronos-hud": {
+        "settings": {
+        "show-stats": {
+            "type": "bool",
+            "name": "Mostrar Estadisticas",
+            "description": "Muestra coordenadas, FPS y telemetria en pantalla.",
+            "default": true
+        },
+        "show-fps": {
+            "type": "bool",
+            "name": "Mostrar FPS",
+            "description": "Muestra FPS suavizados en el HUD.",
+            "default": true
+        },
+        "chronos-substep": {
+            "type": "bool",
+            "name": "Chronos Sub-Step (Experimental)",
+            "description": "Divide los pasos de 240 TPS en el instante exacto del toque. Desactivar para modo 100% vanilla/AREDL.",
+            "default": true
+        },
+        "chronos-grid": {
+            "type": "int",
+            "name": "Subdivisiones por paso (0 = Continuo)",
+            "description": "0 = Continuo (720Hz+ nativo). 10 = Rejilla 0.1 de 240 TPS (2400Hz).",
+            "default": 0,
+            "min": 0,
+            "max": 10
+        },
+        "chronos-hud": {
             "type": "bool",
             "name": "Telemetria Chronos en HUD",
             "description": "Muestra fraccion alpha, cortes ejecutados y fuente de reloj.",
             "default": true
+        },
+        "vbo-orphaning": {
+            "type": "bool",
+            "name": "Adreno VBO Orphaning",
+            "description": "Evita bloqueos CPU-GPU al subir vertices en OpenGL ES (elimina micro-tirones en niveles pesados).",
+            "default": true
+        },
+        "empty-batch-cull": {
+            "type": "bool",
+            "name": "Descarte de Batches Vacios",
+            "description": "Omite el calculo de matrices en SpriteBatches sin objetos visibles.",
+            "default": true
+        },
+        "particle-opt": {
+            "type": "bool",
+            "name": "Optimizacion de Particulas (60Hz + Culling)",
+            "description": "Simula particulas decorativas a 60Hz en pantallas de 185Hz y omite emisores fuera de camara.",
+            "default": true
+        },
+        "render-profiler": {
+            "type": "bool",
+            "name": "Micro-Profiler ARM64 (U/R ms)",
+            "description": "Mide tiempo real de CPU en Update (U) y Renderizado (R) usando el contador CNTVCT_EL0.",
+            "default": true
         }
     }
 }
-    
