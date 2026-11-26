@@ -13,6 +13,10 @@ namespace PerformanceCache {
     inline bool    s_chronosEnabled = true;
     inline int64_t s_chronosGrid    = 0;
     inline bool    s_chronosHud     = true;
+    inline bool    s_vboOrphaning   = true;
+    inline bool    s_emptyBatchCull = true;
+    inline bool    s_particleOpt    = true;
+    inline bool    s_renderProfiler = true;
 }
 
 namespace ChronosTelemetry {
@@ -34,4 +38,10 @@ namespace ChronosTelemetry {
             default: return "--";
         }
     }
+}
+
+namespace RenderTelemetry {
+    inline float smoothUpdateMs = 0.0f;
+    inline float smoothRenderMs = 0.0f;
+    inline float lastUpdateMs   = 0.0f;
 }
